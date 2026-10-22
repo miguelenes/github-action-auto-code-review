@@ -1,0 +1,26 @@
+name: Open Source Agent Reviewer
+description: Run a single-pass, free-model pull request review and post findings
+inputs:
+  repository:
+    description: OWNER/REPOSITORY
+    required: true
+  pull-request:
+    description: Pull request number
+    required: true
+  github-token:
+    description: Token with pull-requests read and issues write access
+    required: true
+  openrouter-api-key:
+    description: OpenRouter API key; selected models must have verified zero pricing
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+      with:
+        node-version: 24
+    - shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
+      run: node "${{ github.action_path }}/dist/cli.js" review --repo "${{ inputs.repository }}" --pr "${{ inputs.pull-request }}"

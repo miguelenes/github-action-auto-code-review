@@ -1,0 +1,17 @@
+services:
+  review-app:
+    build: .
+    ports:
+      - ${PORT:-3000}:3000
+    environment:
+      PORT: 3000
+      STATE_DB: /data/reviews.sqlite
+      GITHUB_APP_ID: ${GITHUB_APP_ID:?set GITHUB_APP_ID}
+      GITHUB_INSTALLATION_ID: ${GITHUB_INSTALLATION_ID:?set GITHUB_INSTALLATION_ID}
+      GITHUB_PRIVATE_KEY: ${GITHUB_PRIVATE_KEY:?set GITHUB_PRIVATE_KEY}
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:?set GITHUB_WEBHOOK_SECRET}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY}
+    volumes:
+      - review-data:/data
+volumes:
+  review-data:

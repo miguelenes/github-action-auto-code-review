@@ -1,0 +1,45 @@
+{
+  "researchedAt": "2026-10-22",
+  "skills": [
+    {
+      "name": "github-actions-templates",
+      "repository": "https://github.com/wshobson/agents",
+      "revision": "0874a27b17a22e2b7c2e2bcd725768e0803cad06",
+      "sourcePath": "plugins/cicd-automation/skills/github-actions-templates",
+      "license": "MIT",
+      "sha256": "fc3c06ddb2423804be275defbb8a2c35f1564ba28aaeb07dcf01ec9c4cc8f023"
+    },
+    {
+      "name": "github-actions-hardening",
+      "repository": "https://github.com/github/awesome-copilot",
+      "revision": "2d4b998d2df28917074ee33db45c9601484c72ad",
+      "sourcePath": "skills/github-actions-hardening",
+      "license": "MIT",
+      "sha256": "31a8e7483d978e6267941edefebbe42aaa946bb3d43c9095aa3db343d4a8ff06"
+    },
+    {
+      "name": "code-review",
+      "repository": "https://github.com/mattpocock/skills",
+      "revision": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+      "sourcePath": "skills/engineering/code-review",
+      "license": "MIT",
+      "sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357"
+    },
+    {
+      "name": "receiving-code-review",
+      "repository": "https://github.com/obra/superpowers",
+      "revision": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+      "sourcePath": "skills/receiving-code-review",
+      "license": "MIT",
+      "sha256": "091df1629510af1b92fc4abd6f96732ebedb4cb2c0f3457e8f2740b0504a2438"
+    },
+    {
+      "name": "free-llm-apis",
+      "repository": "https://github.com/mnfst/awesome-free-llm-apis",
+      "revision": "15bcfde01b825be7d0151999b8ddb1488cdec8a7",
+      "sourcePath": "free-llm-apis",
+      "license": "CC0-1.0",
+      "sha256": "953a86065e6f498bbbee54bdbf4ce9ce92885e89f03d6bf5993da244c7177a30"
+    }
+  ]
+}

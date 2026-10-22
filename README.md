@@ -1,27 +1,29 @@
 # Open Source Agent Reviewer
 
-An early-stage, open-source foundation for a GitHub pull request review and repair app. The repository currently contains typed review/provider contracts, eligibility and round-limit helpers, portable agent role prompts, and vendored workflow/review guidance.
+An early-stage, open-source GitHub pull request review app. It currently supports single-pass review comments with OpenRouter models whose catalog reports zero input and output price, plus a hosted GitHub App webhook intake path backed by Node 24 SQLite. The composite GitHub Action invokes the same CLI review path.
 
-**This is not yet a working GitHub App.** Provider adapters, authenticated GitHub operations, webhook server, durable queue, isolated patch executor, and Actions workflows remain unimplemented. The CLI reports this honestly and does not claim to review or merge pull requests.
+## Current limitations
 
-## Requirements
-- Node.js 24+
-- pnpm 10+
+This alpha does **not** modify pull request branches, independently verify findings, persist cross-run review rounds, run repository validation, or enable auto-merge. A clean single-model review is not proof that a change is safe. Do not configure auto-merge based on this app's comment. Review/fix orchestration, fork remediation, shared durable state, and the other seven providers remain future work. The provider discovery command reads catalogs; only OpenRouter inference is implemented.
 
 ## Development
+
+Requires Node.js 24 and pnpm 10.
+
     pnpm install
     pnpm build
+    pnpm test
     pnpm dev check
 
-Commands for provider discovery, PR review, and hosted serving are placeholders until their integrations are implemented.
+## Commands
 
-## Current behavior
-- check: reports supported provider identifiers and runtime version.
-- discover: lists provider identifiers; it does not call provider APIs.
-- review and serve: exit with a configuration error.
-- src/core.ts: model schema, zero-cost model eligibility, five-round guard, and merge-readiness predicate.
+- check — report runtime and adapter identifiers.
+- discover — query configured provider catalogs. Missing credentials and catalog errors are reported per provider. Catalog entries with unknown prices are not considered free.
+- review --repo OWNER/NAME --pr NUMBER — review a PR using a verified zero-priced OpenRouter model, then post one summary comment. Needs GH_TOKEN or GitHub App credentials and OPENROUTER_API_KEY.
+- serve — listen for signed GitHub pull_request webhooks on /webhook; health endpoints are /healthz and /readyz. Needs GitHub App and webhook settings.
 
-The four reviewer role prompts are in runtime/skills/. Vendored upstream skills and their sources are documented in THIRD_PARTY_NOTICES.md.
+The composite action is defined in action.yml. The hosted service can run with Docker Compose. See docs/setup.md before connecting a GitHub App.
 
-## License
-Original project code is MIT licensed. See LICENSE and THIRD_PARTY_NOTICES.md for upstream material.
+## Skills and license
+
+Project skills live in .agents/skills/ and role prompts in runtime/skills/. Original app code is MIT licensed. Vendored skills retain separate notices in THIRD_PARTY_NOTICES.md.
