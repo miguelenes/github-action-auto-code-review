@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { independentReview, parseFilePatches, parseFindings, type Model } from '@miguelenes/reviewer-engine';
+import {
+	independentReview,
+	resumableIndependentReview,
+	addedLines,
+	anchorFindings,
+	parseFilePatches,
+	parseFindings,
+	type Model,
+	type ReviewCheckpoint,
+} from '@miguelenes/reviewer-engine';
 
 const model = (id: string) => ({ provider: 'groq', id }) as Model;
 const evidence = {
@@ -48,4 +57,75 @@ test('portable findings and patches reject unsafe repository paths and oversized
 			),
 		/unsafe or out-of-scope/,
 	);
+});
+
+test('checkpointed reviews resume after reviewer work and invalidate checkpoints for a new head', async () => {
+	const checkpoints = new Map<string, ReviewCheckpoint>();
+	const persistence = {
+		async getCheckpoint(jobId: string, stage: ReviewCheckpoint['stage']) {
+			return checkpoints.get(`${jobId}:${stage}`);
+		},
+		async putCheckpoint(checkpoint: ReviewCheckpoint) {
+			checkpoints.set(`${checkpoint.jobId}:${checkpoint.stage}`, checkpoint);
+		},
+	};
+	let failChallenge = true;
+	const firstCalls: string[] = [];
+	const input = {
+		jobId: 'job-1',
+		headSha: 'head-1',
+		diff: '+ vulnerable route',
+		models: [model('reviewer'), model('security'), model('challenger')],
+		rolePrompts: { reviewer: 'review prompt', challenger: 'challenge prompt' },
+		persistence,
+		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
+			firstCalls.push(selected.id);
+			if (selected.id === 'challenger' && failChallenge) throw new Error('temporary provider failure');
+			return JSON.stringify([evidence]);
+		},
+	};
+	await assert.rejects(resumableIndependentReview(input), /temporary provider failure/);
+	assert.deepEqual(firstCalls.sort(), ['challenger', 'reviewer', 'security']);
+	assert.equal(checkpoints.has('job-1:review'), true);
+	const secondCalls: string[] = [];
+	failChallenge = false;
+	const resumed = await resumableIndependentReview({
+		...input,
+		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
+			secondCalls.push(selected.id);
+			return JSON.stringify([evidence]);
+		},
+	});
+	assert.deepEqual(secondCalls, ['challenger']);
+	assert.equal(resumed.findings.length, 1);
+	const newHeadCalls: string[] = [];
+	await resumableIndependentReview({
+		...input,
+		headSha: 'head-2',
+		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
+			newHeadCalls.push(selected.id);
+			return JSON.stringify([evidence]);
+		},
+	});
+	assert.deepEqual(newHeadCalls.sort(), ['challenger', 'reviewer', 'security']);
+});
+
+test('engine anchoring accepts only findings on added lines', () => {
+	const anchors = addedLines(
+		'diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1,2 +1,3 @@\n unchanged\n-old\n+new\n',
+	);
+	const anchored = {
+		id: 'finding',
+		severity: 'high' as const,
+		category: 'security' as const,
+		title: 'Issue',
+		path: 'src/a.ts',
+		line: 2,
+		evidence: 'evidence',
+		impact: 'impact',
+		remediation: 'fix',
+		status: 'open' as const,
+	};
+	assert.deepEqual(anchorFindings([anchored], anchors), { valid: [anchored], rejected: 0 });
+	assert.deepEqual(anchorFindings([{ ...anchored, line: 1 }], anchors), { valid: [], rejected: 1 });
 });
