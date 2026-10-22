@@ -31,7 +31,10 @@ export async function reviewPullRequest(api:Octokit,target:Repo):Promise<{model:
  const {findings,used}=await independentReview(diff,candidates,key);
  const valid=findings.filter(f=>anchors.get(f.path)?.has(f.line));
  const fresh=await api.pulls.get({owner:target.owner,repo:target.repo,pull_number:target.pr});if(fresh.data.head.sha!==target.sha)throw new Error('head changed during review');
- const body=valid.length?valid.map(f=>`- **${f.severity.toUpperCase()}** ${f.path}:${f.line} — ${f.title}\n  ${f.impact}\n  ${f.remediation}`).join('\n'):'No actionable findings were returned. This is not a verified clean bill of health.';
- await api.issues.createComment({owner:target.owner,repo:target.repo,issue_number:target.pr,body:`Independent review by ${used.map(m=>m.id).join(', ')} (catalog reports $0 input and output pricing):\n\n${body}`});
+ const disclosure=`Independent review by ${used.map(m=>m.id).join(', ')} (catalog reports $0 input and output pricing).`;
+ if(valid.length){
+  await api.pulls.createReview({owner:target.owner,repo:target.repo,pull_number:target.pr,commit_id:target.sha,event:'REQUEST_CHANGES',body:disclosure,comments:valid.slice(0,100).map(f=>({path:f.path,line:f.line,side:'RIGHT' as const,body:`**${f.severity.toUpperCase()} — ${f.title}**\n\n${f.impact}\n\nSuggested remediation: ${f.remediation}\n\nEvidence: ${f.evidence}`}))});
+  if(valid.length>100){const remainder=valid.slice(100).map(f=>`- ${f.severity.toUpperCase()} ${f.path}:${f.line}: ${f.title} — ${f.impact}`).join('\n');await api.issues.createComment({owner:target.owner,repo:target.repo,issue_number:target.pr,body:`Additional verified findings omitted from inline review due to GitHub's comment limit:\n${remainder}`});}
+ }else await api.issues.createComment({owner:target.owner,repo:target.repo,issue_number:target.pr,body:`${disclosure}\n\nNo actionable findings were confirmed. This is not a verified clean bill of health.`});
  return {model:used.map(m=>m.id).join(', '),findings:valid};
 }

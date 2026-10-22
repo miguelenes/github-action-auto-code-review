@@ -1,6 +1,6 @@
 # Local setup
 
-The app is not ready for unattended merging. It posts review summary comments only.
+The app is not ready for unattended merging. It posts inline REQUEST_CHANGES reviews for findings confirmed by the reviewer and challenger. No code changes or auto-merge are performed.
 
 ## Local review
 

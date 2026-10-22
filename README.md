@@ -19,7 +19,7 @@ Requires Node.js 24 and pnpm 10.
 
 - check — report runtime and adapter identifiers.
 - discover — query configured provider catalogs. Missing credentials and catalog errors are reported per provider. Catalog entries with unknown prices are not considered free.
-- review --repo OWNER/NAME --pr NUMBER — review a PR using a verified zero-priced OpenRouter model, then post one summary comment. Needs GH_TOKEN or GitHub App credentials and OPENROUTER_API_KEY.
+- review --repo OWNER/NAME --pr NUMBER — review a PR using a verified zero-priced OpenRouter model, then post a REQUEST_CHANGES review with inline comments for confirmed findings, or a summary comment when none are confirmed. Needs GH_TOKEN or GitHub App credentials and OPENROUTER_API_KEY.
 - serve — listen for signed GitHub pull_request webhooks on /webhook; health endpoints are /healthz and /readyz. Needs GitHub App and webhook settings.
 
 The composite action is defined in action.yml. The hosted service can run with Docker Compose. See docs/setup.md before connecting a GitHub App.
