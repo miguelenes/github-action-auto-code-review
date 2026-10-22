@@ -11,8 +11,8 @@
 		"build": "pnpm --filter @miguelenes/reviewer-engine build && tsc -p tsconfig.json",
 		"start": "node dist/cli.js serve",
 		"test": "node --test dist/*.test.js",
-		"format": "prettier --write \"src/**/*.ts\" \"packages/**/*.ts\" \"eslint.config.js\" \"scripts/**/*.mjs\" \"*.json\" \"pnpm-workspace.yaml\"",
-		"format:check": "prettier --check \"src/**/*.ts\" \"packages/**/*.ts\" \"eslint.config.js\" \"scripts/**/*.mjs\" \"*.json\" \"pnpm-workspace.yaml\"",
+		"format": "prettier --write \"src/**/*.ts\" \"packages/**/*.ts\" \".agents/skills/**/*.md\" \"eslint.config.js\" \"scripts/**/*.mjs\" \"*.json\" \"pnpm-workspace.yaml\"",
+		"format:check": "prettier --check \"src/**/*.ts\" \"packages/**/*.ts\" \".agents/skills/**/*.md\" \"eslint.config.js\" \"scripts/**/*.mjs\" \"*.json\" \"pnpm-workspace.yaml\"",
 		"lint": "eslint src packages --max-warnings=0",
 		"check:boundaries": "node scripts/check-engine-boundaries.mjs",
 		"check": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm build && pnpm test"

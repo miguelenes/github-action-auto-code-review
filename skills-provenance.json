@@ -1,5 +1,5 @@
 {
-	"researchedAt": "2026-10-22",
+	"researchedAt": "2026-10-23",
 	"skills": [
 		{
 			"name": "code-review",
@@ -72,6 +72,51 @@
 			"sourcePath": "skills/typescript-pro",
 			"license": "MIT",
 			"sha256": "1647f8b6f7efc926b61ccfad4832317bf336a78b13265735229e25602afb0350"
+		},
+		{
+			"name": "workers-best-practices",
+			"repository": "https://github.com/cloudflare/skills",
+			"revision": "86505e44f87d801aa1864a3c4109e9a8ae5c409f",
+			"sourcePath": "skills/workers-best-practices/SKILL.md",
+			"license": "Apache-2.0",
+			"sha256": "039c2a70aac53e00da20adc3d527bd3fc9b727be90c28b94c81c5e10092339ef",
+			"integration": "Installed to a temporary staging directory, reviewed, then summarized in the consolidated project skill. No upstream file copied."
+		},
+		{
+			"name": "wrangler",
+			"repository": "https://github.com/cloudflare/skills",
+			"revision": "86505e44f87d801aa1864a3c4109e9a8ae5c409f",
+			"sourcePath": "skills/wrangler/SKILL.md",
+			"license": "Apache-2.0",
+			"sha256": "7884f560509c08ac29ee0d3cfe1b5259855fd6790acf0c5292f4d1c54db7c191",
+			"integration": "Installed to a temporary staging directory, reviewed, then summarized in the consolidated project skill. No upstream file copied."
+		},
+		{
+			"name": "better-auth-best-practices",
+			"repository": "https://github.com/better-auth/skills",
+			"revision": "20c9e88a5c007461a703f1c213572b073196113e",
+			"sourcePath": "better-auth/best-practices/SKILL.md",
+			"license": "NOASSERTION (repository declares no license; reference only)",
+			"sha256": "a5337f186300d187fea2c8f7af339e091afdd130d36c070d0a2dcb8ca04dd413",
+			"integration": "Reviewed for project relevance; no upstream text copied or redistributed."
+		},
+		{
+			"name": "better-auth-security",
+			"repository": "https://github.com/better-auth/skills",
+			"revision": "20c9e88a5c007461a703f1c213572b073196113e",
+			"sourcePath": "security/SKILL.md",
+			"license": "NOASSERTION (repository declares no license; reference only)",
+			"sha256": "042f01c76b63b436c71797c8a1b84470c5b6e0c7cd2400aa0928f733da96facf",
+			"integration": "Reviewed for project relevance; no upstream text copied or redistributed."
+		},
+		{
+			"name": "vercel-react-best-practices",
+			"repository": "https://github.com/vercel-labs/agent-skills",
+			"revision": "063bee94c3f4df8453406c830b0a7df0f2860278",
+			"sourcePath": "skills/react-best-practices/SKILL.md",
+			"license": "MIT (declared in skill metadata; repository has no root license)",
+			"sha256": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355",
+			"integration": "Installed to a temporary staging directory, reviewed, then summarized in the consolidated project skill. No upstream file copied."
 		}
 	]
 }

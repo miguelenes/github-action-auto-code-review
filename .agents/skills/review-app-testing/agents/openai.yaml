@@ -1,4 +1,0 @@
-interface:
-  display_name: "Review App Testing"
-  short_description: "Test provider, webhook, and review orchestration boundaries"
-  default_prompt: "Use $review-app-testing to add or validate deterministic tests in this project."
