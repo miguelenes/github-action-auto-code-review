@@ -12,6 +12,8 @@ The hosted service is a separate, private Cloudflare application. The public rep
 
 The GitHub App installation is separate from GitHub sign-in. Install it on the personal account or organization, then connect the installation from the dashboard. Only a verified personal-account owner or organization admin can connect and manage workspace settings. Select repositories explicitly; connected repositories start disabled.
 
+An installation can connect up to 1,000 repositories. If an organization has more than that, choose a smaller repository selection in the GitHub App installation settings before connecting it.
+
 Workspace allowances are shared across repositories. A source pull-request head uses one review, including delivery retries and any associated fix and verification steps. The existing five-round limit remains. There are no overages or unused-credit rollover. A reservation is released if a job cannot publish a substantive review. GitHub repository rules remain in control of merges; hosted auto-merge is not enabled by default.
 
 Cloud sends diffs and necessary source context to the managed model providers. Provider terms and retention vary; consult the cloud privacy page and current provider records before enabling reviews. Disconnecting the GitHub App removes future access. The dashboard account deletion flow deletes a personal workspace and sign-in data; organization admin access must be transferred and active billing cancelled first. For deletion or billing questions, use the operator contact published by the cloud service.
