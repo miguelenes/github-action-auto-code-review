@@ -1,5 +1,5 @@
 name: Open Source Agent Reviewer
-description: Run a single-pass, free-model pull request review and post findings
+description: Run a multi-agent, free-model pull request review and post findings
 inputs:
   repository:
     description: OWNER/REPOSITORY
@@ -8,7 +8,7 @@ inputs:
     description: Pull request number
     required: true
   github-token:
-    description: Token with pull-requests read and issues write access
+    description: Token with contents write, pull-requests read/write, and issues write access
     required: true
   openrouter-api-key:
     description: OpenRouter API key; selected models must have verified zero pricing

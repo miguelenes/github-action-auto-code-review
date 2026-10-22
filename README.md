@@ -1,6 +1,6 @@
 # Open Source Agent Reviewer
 
-An early-stage, open-source GitHub pull request review app. It currently supports independent reviewer and challenger passes, with evidence-anchored review comments with OpenRouter models whose catalog reports zero input and output price, plus a hosted GitHub App webhook intake path backed by Node 24 SQLite. The composite GitHub Action invokes the same CLI review path.
+An early-stage, open-source GitHub pull request review app. It currently supports independent reviewer and challenger passes, with evidence-anchored review comments with OpenRouter models whose catalog reports zero input and output price, plus a hosted GitHub App webhook intake path backed by Node 24 SQLite. Hosted and CLI review attempts share a source-free GitHub round journal on the agent-review-state branch. The composite GitHub Action invokes the same CLI review path.
 
 ## Current limitations
 

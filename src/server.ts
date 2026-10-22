@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { DatabaseSync } from 'node:sqlite';
 import { verifySignature, installationOctokit } from './github.js';
 import { reviewPullRequest } from './review.js';
+import { reserveReviewRound, finishReviewRound } from './state.js';
 import { join } from 'node:path';
 import { mkdirSync } from 'node:fs';
 const dbPath=process.env.STATE_DB??'data/reviews.sqlite';
@@ -20,11 +21,10 @@ async function drain(){
  const lock=db.prepare("UPDATE jobs SET state='running',updated_at=? WHERE repository=? AND pr=? AND sha=? AND state='queued'").run(new Date().toISOString(),row.repository,row.pr,row.sha);if(!lock.changes)continue;
  try{
   const id=Number(process.env.GITHUB_INSTALLATION_ID);if(!id)throw new Error('GITHUB_INSTALLATION_ID is required');
-  const {data:pr}=await (await installationOctokit(id)).pulls.get({owner,repo,pull_number:row.pr});
-  const prior=db.prepare('SELECT MAX(round) AS rounds FROM jobs WHERE repository=? AND pr=?').get(row.repository,row.pr) as {rounds:number|null};
-  if((prior.rounds??0)>=5)throw new Error('five review rounds exhausted');
-  await reviewPullRequest(await installationOctokit(id),{owner,repo,pr:row.pr,sha:row.sha});
-  setState.run('complete',1,new Date().toISOString(),row.repository,row.pr,row.sha);
+  const api=await installationOctokit(id);
+  const round=await reserveReviewRound(api,owner,repo,row.pr,row.sha);
+  try{await reviewPullRequest(api,{owner,repo,pr:row.pr,sha:row.sha});await finishReviewRound(api,owner,repo,row.pr,row.sha,'complete');setState.run('complete',1,new Date().toISOString(),row.repository,row.pr,row.sha);}
+  catch(e){await finishReviewRound(api,owner,repo,row.pr,row.sha,'needs-human').catch(()=>{});throw e;}
  }catch{setState.run('needs-human',1,new Date().toISOString(),row.repository,row.pr,row.sha);}
  }}catch{ready=false;}finally{working=false;}
 }

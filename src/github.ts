@@ -14,6 +14,6 @@ export async function installationOctokit(installationId:number):Promise<Octokit
  const appId=process.env.GITHUB_APP_ID,key=process.env.GITHUB_PRIVATE_KEY;
  if(!appId||!key)throw new Error('GITHUB_APP_ID and GITHUB_PRIVATE_KEY are required');
  const api=new Octokit({auth:appJwt(appId,key)});
- const {data}=await api.apps.createInstallationAccessToken({installation_id:installationId,permissions:{pull_requests:'write',contents:'read',issues:'write'}});
+ const {data}=await api.apps.createInstallationAccessToken({installation_id:installationId,permissions:{pull_requests:'write',contents:'write',issues:'write'}});
  return new Octokit({auth:data.token});
 }
