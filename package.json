@@ -1,0 +1,26 @@
+{
+  "name": "open-source-agent-reviewer",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/cli.js serve",
+    "test": "node --test dist/**/*.test.js",
+    "check": "pnpm build && pnpm test"
+  },
+  "dependencies": {
+    "@octokit/rest": "^22.0.0",
+    "yaml": "^2.8.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0"
+  }
+}
