@@ -1,10 +1,10 @@
 # Open Source Agent Reviewer
 
-An early-stage, open-source GitHub pull request review app. It currently supports single-pass review comments with OpenRouter models whose catalog reports zero input and output price, plus a hosted GitHub App webhook intake path backed by Node 24 SQLite. The composite GitHub Action invokes the same CLI review path.
+An early-stage, open-source GitHub pull request review app. It currently supports independent reviewer and challenger passes, with evidence-anchored review comments with OpenRouter models whose catalog reports zero input and output price, plus a hosted GitHub App webhook intake path backed by Node 24 SQLite. The composite GitHub Action invokes the same CLI review path.
 
 ## Current limitations
 
-This alpha does **not** modify pull request branches, independently verify findings, persist cross-run review rounds, run repository validation, or enable auto-merge. A clean single-model review is not proof that a change is safe. Do not configure auto-merge based on this app's comment. Review/fix orchestration, fork remediation, shared durable state, and the other seven providers remain future work. The provider discovery command reads catalogs; only OpenRouter inference is implemented.
+This alpha does **not** modify pull request branches, independently verify findings, persist cross-run review rounds, run repository validation, or enable auto-merge. A clean single-model review is not proof that a change is safe. Do not configure auto-merge based on this app's comment. Review/fix orchestration, fork remediation, shared durable state, and the other seven providers remain future work. The provider discovery command reads catalogs; only OpenRouter inference is implemented, and reviews require at least three zero-priced catalog models.
 
 ## Development
 

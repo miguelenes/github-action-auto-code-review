@@ -11,6 +11,7 @@ FROM node:24-bookworm-slim
 ENV NODE_ENV=production PORT=3000 STATE_DB=/data/reviews.sqlite
 WORKDIR /app
 COPY --from=build /app/dist ./dist
+COPY runtime ./runtime
 COPY --from=build /app/node_modules ./node_modules
 COPY package.json ./
 RUN mkdir -p /data && chown -R node:node /app /data
