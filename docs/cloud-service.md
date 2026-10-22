@@ -28,4 +28,4 @@ To move from self-hosted operation to Cloud, first disable the existing Action/w
 
 ## Hosted service status
 
-The private cloud project is a prelaunch implementation. Review admission and paid checkout remain closed until a queue processor, provider accounts, eligibility evidence, and measured capacity pass their release gates. Do not send customer repository data to a deployment whose dashboard still reports admission paused.
+The private cloud project is a prelaunch sandbox. Its queue processor is implemented and deployed, but sign-in, review admission, and paid checkout remain closed until live GitHub OAuth and App configuration, Stripe test-mode lifecycle checks, verified provider accounts and terms, and representative Workers/D1 capacity evidence pass their release gates. Do not send customer repository data to a deployment whose dashboard still reports admission paused.
