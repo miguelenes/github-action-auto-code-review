@@ -1,0 +1,52 @@
+name: Isolated PR validation
+run-name: Validate PR ${{ inputs.pull_number }} @ ${{ inputs.head_sha }}
+on:
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: Pull request number
+        required: true
+        type: string
+      head_sha:
+        description: Exact commit to validate
+        required: true
+        type: string
+      base_ref:
+        description: Trusted base branch containing this workflow
+        required: true
+        type: string
+      validation_commands:
+        description: Validation commands from trusted base configuration
+        required: true
+        type: string
+permissions: {}
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          ref: ${{ inputs.base_ref }}
+          persist-credentials: false
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          ref: ${{ inputs.head_sha }}
+          path: untrusted
+          persist-credentials: false
+      - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+        with:
+          version: 10
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: 24
+      - name: Run isolated validation commands
+        env:
+          VALIDATION_COMMANDS: ${{ inputs.validation_commands }}
+        shell: bash
+        run: |
+          while IFS= read -r command; do
+            [[ -z "$command" ]] && continue
+            (cd untrusted && bash -euo pipefail -c "$command")
+          done <<< "$VALIDATION_COMMANDS"

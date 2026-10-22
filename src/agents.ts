@@ -8,7 +8,7 @@ async function ask(model:Model,key:string,system:string,prompt:string):Promise<s
  const body=await res.json() as {choices?:{message?:{content?:string}}[]};
  return body.choices?.[0]?.message?.content??'[]';
 }
-function parseFindings(text:string):Partial<Finding>[] {try{const x=JSON.parse(text.replace(/^\s*```(?:json)?|\s*```\s*$/g,''));return Array.isArray(x)?x:[];}catch{return [];}}
+function parseFindings(text:string):Partial<Finding>[] {const x:unknown=JSON.parse(text.replace(/^\s*```(?:json)?|\s*```\s*$/g,''));if(!Array.isArray(x))throw new Error('review model returned a non-array result');return x;}
 export async function independentReview(diff:string,models:Model[],key:string):Promise<{findings:Finding[];used:Model[]}>{
  const usable=models.slice(0,3);if(usable.length<3)throw new Error('three distinct zero-priced models are required for reviewer and challenger passes');
  const [reviewer,challenger]=await Promise.all([loadRole('reviewer'),loadRole('challenger')]);
@@ -24,4 +24,18 @@ export async function independentReview(diff:string,models:Model[],key:string):P
  const unique=new Map<string,Finding>();
  for(const f of verified){if(!allowed.has(signature(f)))continue; if(!['critical','high','medium','low'].includes(String(f.severity))||!f.path||!Number.isInteger(Number(f.line))||!f.title)continue;const k=`${f.path}:${f.line}:${f.title}`;unique.set(k,{id:k,severity:f.severity as Finding['severity'],category:'correctness',title:f.title,path:f.path,line:Number(f.line),evidence:String(f.evidence??''),impact:String(f.impact??''),remediation:String(f.remediation??''),status:'open'});}
  return {findings:[...unique.values()],used:usable.slice(0,3)};
+}
+
+export type FilePatch={path:string;content:string};
+export function parseFilePatches(text:string,allowed:Set<string>):FilePatch[]{
+ const cleaned=text.replace(/^\s*```(?:json)?|\s*```\s*$/g,'');const parsed:unknown=JSON.parse(cleaned);if(!Array.isArray(parsed))throw new Error('fixer response must be a JSON array');
+ return parsed.map((item:unknown)=>{if(!item||typeof item!=='object')throw new Error('invalid file patch');const p=item as Record<string,unknown>,path=String(p.path??''),content=p.content;if(!allowed.has(path)||path.startsWith('/')||path.split('/').includes('..')||typeof content!=='string'||content.includes('\0')||Buffer.byteLength(content)>500_000)throw new Error('fixer proposed an unsafe or out-of-scope file patch');return {path,content};});
+}
+export async function proposeFixes(findings:Finding[],diff:string,sourceFiles:Record<string,string>,model:Model,key:string,allowed:Set<string>):Promise<FilePatch[]>{
+ const fixer=await loadRole('fixer');const response=await ask(model,key,fixer+' Return only a JSON array of complete text file replacements in the shape [{"path":"...","content":"..."}]. Change only files containing validated findings; preserve unrelated edits.',JSON.stringify({findings,diff,sourceFiles}));
+ return parseFilePatches(response,allowed);
+}
+export async function verifyFixes(findings:Finding[],patches:FilePatch[],sourceFiles:Record<string,string>,model:Model,key:string):Promise<boolean>{
+ const verifier=await loadRole('verifier');const text=await ask(model,key,verifier+' Return JSON only: {"resolved":true|false,"reason":"..."}. Confirm every finding is corrected by the supplied file contents.',JSON.stringify({findings,sourceFiles,patches}));
+ try{const value=JSON.parse(text.replace(/^\s*```(?:json)?|\s*```\s*$/g,'')) as {resolved?:unknown};return value.resolved===true;}catch{return false;}
 }

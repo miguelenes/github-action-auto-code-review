@@ -1,0 +1,15 @@
+# Read from the trusted pull request base commit.
+mode: hosted
+providers:
+  - openrouter
+preferredModels: []
+allowedRepositories: []
+automaticFixes: false
+autoMerge: false
+mergeMethod: SQUASH
+validationWorkflow: validate-review.yml
+validationTimeoutSeconds: 300
+validationCommands:
+  - pnpm --dir untrusted install --frozen-lockfile --ignore-scripts
+  - pnpm --dir untrusted build
+  - pnpm --dir untrusted test

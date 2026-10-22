@@ -9,21 +9,24 @@ const dbPath=process.env.STATE_DB??'data/reviews.sqlite';
 mkdirSync(join(dbPath,'..'),{recursive:true});
 const db=new DatabaseSync(dbPath);
 db.exec(`CREATE TABLE IF NOT EXISTS jobs(repository TEXT NOT NULL, pr INTEGER NOT NULL, sha TEXT NOT NULL, round INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL, updated_at TEXT NOT NULL, PRIMARY KEY(repository,pr,sha));`);
+db.prepare("UPDATE jobs SET state='recovering',updated_at=? WHERE state='running'").run(new Date().toISOString());
 const enqueue=db.prepare(`INSERT OR IGNORE INTO jobs(repository,pr,sha,round,state,updated_at) VALUES(?,?,?,0,'queued',?)`);
 const setState=db.prepare('UPDATE jobs SET state=?,round=round+?,updated_at=? WHERE repository=? AND pr=? AND sha=?');
-const active=db.prepare("SELECT 1 AS found FROM jobs WHERE state='running' LIMIT 1");
-const pending=db.prepare("SELECT repository,pr,sha FROM jobs WHERE state='queued' LIMIT 1");
+const pending=db.prepare("SELECT repository,pr,sha,state FROM jobs WHERE state IN('queued','recovering') LIMIT 1");
 let working=false, ready=true;
 async function drain(){
  if(working)return;working=true;
- try{for(;;){const row=pending.get() as {repository:string;pr:number;sha:string}|undefined;if(!row)break;
+ try{for(;;){const row=pending.get() as {repository:string;pr:number;sha:string;state:'queued'|'recovering'}|undefined;if(!row)break;
  const [owner,repo]=row.repository.split('/');if(!owner||!repo){setState.run('failed',0,new Date().toISOString(),row.repository,row.pr,row.sha);continue;}
- const lock=db.prepare("UPDATE jobs SET state='running',updated_at=? WHERE repository=? AND pr=? AND sha=? AND state='queued'").run(new Date().toISOString(),row.repository,row.pr,row.sha);if(!lock.changes)continue;
+ const lock=db.prepare("UPDATE jobs SET state='running',updated_at=? WHERE repository=? AND pr=? AND sha=? AND state IN('queued','recovering')").run(new Date().toISOString(),row.repository,row.pr,row.sha);if(!lock.changes)continue;
  try{
   const id=Number(process.env.GITHUB_INSTALLATION_ID);if(!id)throw new Error('GITHUB_INSTALLATION_ID is required');
   const api=await installationOctokit(id);
-  const round=await reserveReviewRound(api,owner,repo,row.pr,row.sha);
-  try{await reviewPullRequest(api,{owner,repo,pr:row.pr,sha:row.sha});await finishReviewRound(api,owner,repo,row.pr,row.sha,'complete');setState.run('complete',1,new Date().toISOString(),row.repository,row.pr,row.sha);}
+  const current=await api.pulls.get({owner,repo,pull_number:row.pr});
+  if(current.data.head.sha!==row.sha){setState.run('ignored',0,new Date().toISOString(),row.repository,row.pr,row.sha);continue;}
+  const reservation=await reserveReviewRound(api,owner,repo,row.pr,row.sha,8,60*60*1000,row.state==='recovering');
+  if(!reservation.execute){setState.run('ignored',0,new Date().toISOString(),row.repository,row.pr,row.sha);continue;}
+  try{const result=await reviewPullRequest(api,{owner,repo,pr:row.pr,sha:row.sha},'hosted');await finishReviewRound(api,owner,repo,row.pr,row.sha,result.resolved?'complete':'needs-human');setState.run(result.resolved?'complete':'needs-human',1,new Date().toISOString(),row.repository,row.pr,row.sha);}
   catch(e){await finishReviewRound(api,owner,repo,row.pr,row.sha,'needs-human').catch(()=>{});throw e;}
  }catch{setState.run('needs-human',1,new Date().toISOString(),row.repository,row.pr,row.sha);}
  }}catch{ready=false;}finally{working=false;}

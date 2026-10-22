@@ -17,8 +17,9 @@ async function main(){
   else if(process.env.GH_TOKEN)api=new Octokit({auth:process.env.GH_TOKEN});
   else throw new Error('Set GH_TOKEN or GitHub App credentials');
   const {data}=await api.pulls.get({owner,repo:name,pull_number:pr});
-  const round=await reserveReviewRound(api,owner,name,pr,data.head.sha);
-  try{const result=await reviewPullRequest(api,{owner,repo:name,pr,sha:data.head.sha});await finishReviewRound(api,owner,name,pr,data.head.sha,'complete');console.log(JSON.stringify({...result,round},null,2));}
+  const reservation=await reserveReviewRound(api,owner,name,pr,data.head.sha);
+  if(!reservation.execute){console.log(JSON.stringify({round:reservation.round,skipped:true,reason:'duplicate-or-stale-head'},null,2));return;}
+  try{const result=await reviewPullRequest(api,{owner,repo:name,pr,sha:data.head.sha});await finishReviewRound(api,owner,name,pr,data.head.sha,result.resolved?'complete':'needs-human');console.log(JSON.stringify({...result,round:reservation.round},null,2));}
   catch(e){await finishReviewRound(api,owner,name,pr,data.head.sha,'needs-human');throw e;}return;
  }
  if(command==='serve'){await import('./server.js');return;}

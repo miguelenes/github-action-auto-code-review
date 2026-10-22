@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Octokit } from '@octokit/rest';
-import { reserveReviewRound, finishReviewRound } from './state.js';
+import { reserveReviewRound, finishReviewRound, attachFixCommit } from './state.js';
 function fakeApi(){
  let head:string|undefined,sequence=0;const blobs=new Map<string,string>(),trees=new Map<string,string>(),commits=new Map<string,{tree:{sha:string};parents:string[]}>,refs=new Map<string,string>();
  const api={git:{
@@ -17,4 +17,5 @@ function fakeApi(){
  }};
  return api as unknown as Octokit;
 }
-test('review journal reserves atomically and enforces five PR rounds',async()=>{const api=fakeApi();const rounds=await Promise.all([reserveReviewRound(api,'o','r',7,'a'),reserveReviewRound(api,'o','r',7,'b')]);assert.deepEqual(rounds.sort(),[1,2]);await finishReviewRound(api,'o','r',7,'a','complete');await reserveReviewRound(api,'o','r',7,'c');await reserveReviewRound(api,'o','r',7,'d');await reserveReviewRound(api,'o','r',7,'e');await assert.rejects(reserveReviewRound(api,'o','r',7,'f'),/five review rounds exhausted/)});
+test('review journal claims each new head once and enforces five PR rounds',async()=>{const api=fakeApi();const first=await reserveReviewRound(api,'o','r',7,'a');assert.deepEqual(first,{round:1,execute:true});const duplicate=await reserveReviewRound(api,'o','r',7,'a');assert.deepEqual(duplicate,{round:1,execute:false});const next=await reserveReviewRound(api,'o','r',7,'b');assert.deepEqual(next,{round:2,execute:true});await finishReviewRound(api,'o','r',7,'a','complete');await reserveReviewRound(api,'o','r',7,'c');await reserveReviewRound(api,'o','r',7,'d');const fifth=await reserveReviewRound(api,'o','r',7,'e');assert.deepEqual(fifth,{round:5,execute:true});const resumed=await reserveReviewRound(api,'o','r',7,'e',8,60*60*1000,true);assert.deepEqual(resumed,{round:5,execute:true});await assert.rejects(reserveReviewRound(api,'o','r',7,'f'),/five review rounds exhausted/)});
+test('bot fix commit is bound to its existing review round',async()=>{const api=fakeApi();await reserveReviewRound(api,'o','r',7,'review-sha');await attachFixCommit(api,'o','r',7,'review-sha','bot-fix-sha');assert.deepEqual(await reserveReviewRound(api,'o','r',7,'bot-fix-sha'),{round:1,execute:false});await finishReviewRound(api,'o','r',7,'review-sha','complete');assert.deepEqual(await reserveReviewRound(api,'o','r',7,'bot-fix-sha'),{round:1,execute:false})});

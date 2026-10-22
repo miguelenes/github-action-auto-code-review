@@ -1,5 +1,5 @@
 name: Open Source Agent Reviewer
-description: Run a multi-agent, free-model pull request review and post findings
+description: Run a multi-agent pull request review, apply same-repository fixes, and validate them
 inputs:
   repository:
     description: OWNER/REPOSITORY
@@ -8,7 +8,7 @@ inputs:
     description: Pull request number
     required: true
   github-token:
-    description: Token with contents write, pull-requests read/write, and issues write access
+    description: Token with contents, pull requests, issues, and Actions write access
     required: true
   openrouter-api-key:
     description: OpenRouter API key; selected models must have verified zero pricing
@@ -19,7 +19,15 @@ runs:
     - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
       with:
         node-version: 24
+    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+      with:
+        version: 12.14.0
+    - name: Build reviewer
+      shell: bash
+      working-directory: ${{ github.action_path }}
+      run: pnpm install --frozen-lockfile --ignore-scripts && pnpm build
     - shell: bash
+      working-directory: ${{ github.action_path }}
       env:
         GH_TOKEN: ${{ inputs.github-token }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
