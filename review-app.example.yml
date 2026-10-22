@@ -3,6 +3,13 @@ mode: hosted
 providers:
   - openrouter
 preferredModels: []
+# Owner-verified evidence is required to enable a direct provider's exact model.
+# Never add trials or paid-credit offers here; direct providers have no request-level cost cap.
+verifiedFreeOffers: []
+# Optional. OpenRouter only; every entry is an owner attestation for the exact model.
+# The live OpenRouter key must have a finite non-resetting cap <= this budget,
+# include BYOK spending, report remaining balance, and expire by trialExpiresAt.
+verifiedTrialOffers: []
 allowedRepositories: []
 automaticFixes: false
 autoMerge: false
