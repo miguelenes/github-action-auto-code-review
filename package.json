@@ -1,28 +1,39 @@
 {
-  "name": "open-source-agent-reviewer",
-  "version": "0.1.0",
-  "private": false,
-  "type": "module",
-  "engines": {
-    "node": ">=24"
-  },
-  "scripts": {
-    "dev": "tsx src/cli.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/cli.js serve",
-    "test": "node --test dist/**/*.test.js",
-    "check": "pnpm build && pnpm test"
-  },
-  "dependencies": {
-    "@octokit/rest": "^22.0.0",
-    "yaml": "^2.8.0",
-    "zod": "^4.0.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.0.0",
-    "tsx": "^4.20.0",
-    "typescript": "^5.9.0"
-  },
-  "license": "MIT",
-  "packageManager": "pnpm@12.14.0"
+	"name": "open-source-agent-reviewer",
+	"version": "0.1.0",
+	"private": false,
+	"type": "module",
+	"engines": {
+		"node": ">=24"
+	},
+	"scripts": {
+		"dev": "tsx src/cli.ts",
+		"build": "pnpm --filter @miguelenes/reviewer-engine build && tsc -p tsconfig.json",
+		"start": "node dist/cli.js serve",
+		"test": "node --test dist/*.test.js",
+		"format": "prettier --write \"src/**/*.ts\" \"packages/**/*.ts\" \".agents/skills/**/*.md\" \"eslint.config.js\" \"scripts/**/*.mjs\" \"*.json\" \"pnpm-workspace.yaml\"",
+		"format:check": "prettier --check \"src/**/*.ts\" \"packages/**/*.ts\" \".agents/skills/**/*.md\" \"eslint.config.js\" \"scripts/**/*.mjs\" \"*.json\" \"pnpm-workspace.yaml\"",
+		"lint": "eslint src packages --max-warnings=0",
+		"check:boundaries": "node --test scripts/check-engine-boundaries.test.mjs && node scripts/check-engine-boundaries.mjs",
+		"check": "pnpm format:check && pnpm lint && pnpm check:boundaries && pnpm build && pnpm test"
+	},
+	"dependencies": {
+		"@miguelenes/reviewer-engine": "workspace:2.0.0",
+		"@octokit/rest": "^22.0.0",
+		"yaml": "^2.8.0",
+		"zod": "^4.0.0"
+	},
+	"devDependencies": {
+		"@eslint/js": "^10.0.1",
+		"@types/node": "^24.0.0",
+		"eslint": "^10.13.0",
+		"eslint-config-prettier": "^10.1.8",
+		"globals": "^17.13.0",
+		"prettier": "^3.9.10",
+		"tsx": "^4.20.0",
+		"typescript": "^5.9.0",
+		"typescript-eslint": "^8.72.0"
+	},
+	"license": "MIT",
+	"packageManager": "pnpm@12.14.0"
 }

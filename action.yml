@@ -1,5 +1,5 @@
 name: Open Source Agent Reviewer
-description: Run a multi-agent pull request review, apply same-repository fixes, and validate them
+description: Review pull requests, apply validated same-repository fixes or authorized fork remediation, and validate them
 inputs:
   repository:
     description: OWNER/REPOSITORY
@@ -7,19 +7,52 @@ inputs:
   pull-request:
     description: Pull request number
     required: true
+  remediation-actor:
+    description: GitHub username from a trusted issue_comment event; only repository maintainers can authorize fork remediation
+    required: false
   github-token:
-    description: Token with contents, pull requests, issues, and Actions write access
-    required: true
+    description: Optional repository-scoped token for local or development workflows; prefer GitHub App credentials
+    required: false
+  github-app-id:
+    description: GitHub App ID for repository-scoped installation tokens
+    required: false
+  github-installation-id:
+    description: GitHub App installation ID
+    required: false
+  github-private-key:
+    description: GitHub App private key (pass as an Actions secret)
+    required: false
   openrouter-api-key:
-    description: OpenRouter API key; selected models must have verified zero pricing
-    required: true
+    description: OpenRouter API key (optional unless openrouter is enabled)
+    required: false
+  nvidia-api-key:
+    description: NVIDIA API key (optional unless nvidia is enabled)
+    required: false
+  groq-api-key:
+    description: Groq API key (optional unless groq is enabled)
+    required: false
+  gemini-api-key:
+    description: Gemini API key (optional unless gemini is enabled)
+    required: false
+  cerebras-api-key:
+    description: Cerebras API key (optional unless cerebras is enabled)
+    required: false
+  mistral-api-key:
+    description: Mistral API key (optional unless mistral is enabled)
+    required: false
+  cloudflare-api-token:
+    description: Cloudflare API token (optional unless cloudflare is enabled)
+    required: false
+  cloudflare-account-id:
+    description: Cloudflare account ID (required when cloudflare is enabled)
+    required: false
 runs:
   using: composite
   steps:
-    - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+    - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
       with:
         node-version: 24
-    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320
+    - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
       with:
         version: 12.14.0
     - name: Build reviewer
@@ -30,5 +63,24 @@ runs:
       working-directory: ${{ github.action_path }}
       env:
         GH_TOKEN: ${{ inputs.github-token }}
+        GITHUB_APP_ID: ${{ inputs.github-app-id }}
+        GITHUB_INSTALLATION_ID: ${{ inputs.github-installation-id }}
+        GITHUB_PRIVATE_KEY: ${{ inputs.github-private-key }}
         OPENROUTER_API_KEY: ${{ inputs.openrouter-api-key }}
-      run: node "${{ github.action_path }}/dist/cli.js" review --repo "${{ inputs.repository }}" --pr "${{ inputs.pull-request }}"
+        NVIDIA_API_KEY: ${{ inputs.nvidia-api-key }}
+        GROQ_API_KEY: ${{ inputs.groq-api-key }}
+        GEMINI_API_KEY: ${{ inputs.gemini-api-key }}
+        CEREBRAS_API_KEY: ${{ inputs.cerebras-api-key }}
+        MISTRAL_API_KEY: ${{ inputs.mistral-api-key }}
+        CLOUDFLARE_API_TOKEN: ${{ inputs.cloudflare-api-token }}
+        CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare-account-id }}
+        REVIEW_REPOSITORY: ${{ inputs.repository }}
+        REVIEW_PULL_REQUEST: ${{ inputs.pull-request }}
+        REVIEW_REMEDIATION_ACTOR: ${{ inputs.remediation-actor }}
+        REVIEW_REMEDIATION_COMMENT: ${{ github.event.comment.body }}
+      run: |
+        if [[ "$GITHUB_EVENT_NAME" == "issue_comment" && "$REVIEW_REMEDIATION_COMMENT" == "/review-app remediate" ]]; then
+          node dist/cli.js remediate --repo "$REVIEW_REPOSITORY" --pr "$REVIEW_PULL_REQUEST" --actor "$REVIEW_REMEDIATION_ACTOR"
+        else
+          node dist/cli.js review --repo "$REVIEW_REPOSITORY" --pr "$REVIEW_PULL_REQUEST"
+        fi

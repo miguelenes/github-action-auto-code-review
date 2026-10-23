@@ -1,0 +1,100 @@
+name: Automated pull request review
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+  workflow_call:
+    inputs:
+      enabled:
+        description: Explicitly enable the reusable review workflow
+        required: false
+        type: boolean
+        default: false
+      pull_request_number:
+        description: Pull request number in the caller repository
+        required: true
+        type: number
+      app_repository:
+        description: Owner/repository containing this app
+        required: false
+        type: string
+      app_ref:
+        description: Full immutable commit SHA for this app
+        required: false
+        type: string
+    secrets:
+      github_app_id:
+        required: true
+      github_installation_id:
+        required: true
+      github_private_key:
+        required: true
+      openrouter_api_key:
+        required: false
+      nvidia_api_key:
+        required: false
+      groq_api_key:
+        required: false
+      gemini_api_key:
+        required: false
+      cerebras_api_key:
+        required: false
+      mistral_api_key:
+        required: false
+      cloudflare_api_token:
+        required: false
+      cloudflare_account_id:
+        required: false
+permissions: {}
+jobs:
+  review:
+    if: >-
+      (github.event_name == 'workflow_call' && inputs.enabled) ||
+      (github.event_name == 'pull_request_target' && vars.REVIEW_APP_ENABLED == 'true' && !github.event.pull_request.draft) ||
+      (github.event_name == 'issue_comment' && vars.REVIEW_APP_ENABLED == 'true' && github.event.issue.pull_request != null && github.event.comment.body == '/review-app remediate')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Select trusted app revision
+        id: app
+        shell: bash
+        env:
+          CALLER_APP_REPOSITORY: ${{ inputs.app_repository }}
+          CALLER_APP_REF: ${{ inputs.app_ref }}
+          EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request_target" || "$GITHUB_EVENT_NAME" == "issue_comment" ]]; then
+            app_repository="$GITHUB_REPOSITORY"
+            app_ref="$EVENT_BASE_SHA"
+          else
+            app_repository="$CALLER_APP_REPOSITORY"
+            app_ref="$CALLER_APP_REF"
+          fi
+          [[ "$app_repository" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || { echo 'invalid app repository' >&2; exit 1; }
+          [[ "$app_ref" =~ ^[0-9a-f]{40}$ ]] || { echo 'app_ref must be a full commit SHA' >&2; exit 1; }
+          printf 'repository=%s\nref=%s\n' "$app_repository" "$app_ref" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+        with:
+          repository: ${{ steps.app.outputs.repository }}
+          ref: ${{ steps.app.outputs.ref }}
+          path: review-app
+          persist-credentials: false
+      - name: Review pull request through the trusted app
+        uses: ./review-app
+        with:
+          repository: ${{ github.repository }}
+          pull-request: ${{ inputs.pull_request_number || github.event.pull_request.number || github.event.issue.number }}
+          remediation-actor: ${{ github.event.comment.user.login }}
+          github-app-id: ${{ secrets.github_app_id }}
+          github-installation-id: ${{ secrets.github_installation_id }}
+          github-private-key: ${{ secrets.github_private_key }}
+          openrouter-api-key: ${{ secrets.openrouter_api_key }}
+          nvidia-api-key: ${{ secrets.nvidia_api_key }}
+          groq-api-key: ${{ secrets.groq_api_key }}
+          gemini-api-key: ${{ secrets.gemini_api_key }}
+          cerebras-api-key: ${{ secrets.cerebras_api_key }}
+          mistral-api-key: ${{ secrets.mistral_api_key }}
+          cloudflare-api-token: ${{ secrets.cloudflare_api_token }}
+          cloudflare-account-id: ${{ secrets.cloudflare_account_id }}

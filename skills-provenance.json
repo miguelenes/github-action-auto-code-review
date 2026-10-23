@@ -1,45 +1,122 @@
 {
-  "researchedAt": "2026-10-22",
-  "skills": [
-    {
-      "name": "github-actions-templates",
-      "repository": "https://github.com/wshobson/agents",
-      "revision": "0874a27b17a22e2b7c2e2bcd725768e0803cad06",
-      "sourcePath": "plugins/cicd-automation/skills/github-actions-templates",
-      "license": "MIT",
-      "sha256": "fc3c06ddb2423804be275defbb8a2c35f1564ba28aaeb07dcf01ec9c4cc8f023"
-    },
-    {
-      "name": "github-actions-hardening",
-      "repository": "https://github.com/github/awesome-copilot",
-      "revision": "2d4b998d2df28917074ee33db45c9601484c72ad",
-      "sourcePath": "skills/github-actions-hardening",
-      "license": "MIT",
-      "sha256": "31a8e7483d978e6267941edefebbe42aaa946bb3d43c9095aa3db343d4a8ff06"
-    },
-    {
-      "name": "code-review",
-      "repository": "https://github.com/mattpocock/skills",
-      "revision": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
-      "sourcePath": "skills/engineering/code-review",
-      "license": "MIT",
-      "sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357"
-    },
-    {
-      "name": "receiving-code-review",
-      "repository": "https://github.com/obra/superpowers",
-      "revision": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
-      "sourcePath": "skills/receiving-code-review",
-      "license": "MIT",
-      "sha256": "091df1629510af1b92fc4abd6f96732ebedb4cb2c0f3457e8f2740b0504a2438"
-    },
-    {
-      "name": "free-llm-apis",
-      "repository": "https://github.com/mnfst/awesome-free-llm-apis",
-      "revision": "15bcfde01b825be7d0151999b8ddb1488cdec8a7",
-      "sourcePath": "free-llm-apis",
-      "license": "CC0-1.0",
-      "sha256": "953a86065e6f498bbbee54bdbf4ce9ce92885e89f03d6bf5993da244c7177a30"
-    }
-  ]
+	"researchedAt": "2026-10-23",
+	"skills": [
+		{
+			"name": "code-review",
+			"repository": "https://github.com/mattpocock/skills",
+			"revision": "5beb35b040e3de97e54fa9e386d7e42d15c295c2",
+			"sourcePath": "skills/engineering/code-review",
+			"license": "MIT",
+			"sha256": "09eb147f793e4647949edd32dbad278f0554dfb56e0d46b699cd4c2c55bf0357"
+		},
+		{
+			"name": "context7-mcp",
+			"repository": "https://github.com/upstash/context7",
+			"revision": "d980242a5b04be30ae8804124a8be259bcc2a227",
+			"sourcePath": "skills/context7-mcp",
+			"license": "MIT",
+			"sha256": "d1ea3447e915a7fc49ad7c6635fc4eb264ce2b15d87e4d5aa42703b5efb9d726"
+		},
+		{
+			"name": "free-llm-apis",
+			"repository": "https://github.com/mnfst/awesome-free-llm-apis",
+			"revision": "15bcfde01b825be7d0151999b8ddb1488cdec8a7",
+			"sourcePath": "free-llm-apis",
+			"license": "CC0-1.0",
+			"sha256": "953a86065e6f498bbbee54bdbf4ce9ce92885e89f03d6bf5993da244c7177a30"
+		},
+		{
+			"name": "github-actions-hardening",
+			"repository": "https://github.com/github/awesome-copilot",
+			"revision": "2d4b998d2df28917074ee33db45c9601484c72ad",
+			"sourcePath": "skills/github-actions-hardening",
+			"license": "MIT",
+			"sha256": "31a8e7483d978e6267941edefebbe42aaa946bb3d43c9095aa3db343d4a8ff06"
+		},
+		{
+			"name": "github-actions-templates",
+			"repository": "https://github.com/wshobson/agents",
+			"revision": "0874a27b17a22e2b7c2e2bcd725768e0803cad06",
+			"sourcePath": "plugins/cicd-automation/skills/github-actions-templates",
+			"license": "MIT",
+			"sha256": "fc3c06ddb2423804be275defbb8a2c35f1564ba28aaeb07dcf01ec9c4cc8f023"
+		},
+		{
+			"name": "node",
+			"repository": "https://github.com/mcollina/skills",
+			"revision": "c75d70dbfbe991d8cec42aeda0b64ff14fbb9ac7",
+			"sourcePath": "skills/node",
+			"license": "MIT",
+			"sha256": "fa2888f4a2200985df1802469a2eea8652510276c188fa31878047bf9c63957e"
+		},
+		{
+			"name": "receiving-code-review",
+			"repository": "https://github.com/obra/superpowers",
+			"revision": "2ce8aa15d05bd57213e6f746f953aafb7ded7a8b",
+			"sourcePath": "skills/receiving-code-review",
+			"license": "MIT",
+			"sha256": "091df1629510af1b92fc4abd6f96732ebedb4cb2c0f3457e8f2740b0504a2438"
+		},
+		{
+			"name": "typescript-advanced-types",
+			"repository": "https://github.com/wshobson/agents",
+			"revision": "0874a27b17a22e2b7c2e2bcd725768e0803cad06",
+			"sourcePath": "plugins/javascript-typescript/skills/typescript-advanced-types",
+			"license": "MIT",
+			"sha256": "c32101c65134d94ef1a3305ef486020b57be6408f97ed952c9c560e3fe04188d"
+		},
+		{
+			"name": "typescript-pro",
+			"repository": "https://github.com/jeffallan/claude-skills",
+			"revision": "02b05028ba6c93f7aed45314b15c0dd5abead9d6",
+			"sourcePath": "skills/typescript-pro",
+			"license": "MIT",
+			"sha256": "1647f8b6f7efc926b61ccfad4832317bf336a78b13265735229e25602afb0350"
+		},
+		{
+			"name": "workers-best-practices",
+			"repository": "https://github.com/cloudflare/skills",
+			"revision": "86505e44f87d801aa1864a3c4109e9a8ae5c409f",
+			"sourcePath": "skills/workers-best-practices/SKILL.md",
+			"license": "Apache-2.0",
+			"sha256": "039c2a70aac53e00da20adc3d527bd3fc9b727be90c28b94c81c5e10092339ef",
+			"integration": "Installed to a temporary staging directory, reviewed, then summarized in the consolidated project skill. No upstream file copied."
+		},
+		{
+			"name": "wrangler",
+			"repository": "https://github.com/cloudflare/skills",
+			"revision": "86505e44f87d801aa1864a3c4109e9a8ae5c409f",
+			"sourcePath": "skills/wrangler/SKILL.md",
+			"license": "Apache-2.0",
+			"sha256": "7884f560509c08ac29ee0d3cfe1b5259855fd6790acf0c5292f4d1c54db7c191",
+			"integration": "Installed to a temporary staging directory, reviewed, then summarized in the consolidated project skill. No upstream file copied."
+		},
+		{
+			"name": "better-auth-best-practices",
+			"repository": "https://github.com/better-auth/skills",
+			"revision": "20c9e88a5c007461a703f1c213572b073196113e",
+			"sourcePath": "better-auth/best-practices/SKILL.md",
+			"license": "NOASSERTION (repository declares no license; reference only)",
+			"sha256": "a5337f186300d187fea2c8f7af339e091afdd130d36c070d0a2dcb8ca04dd413",
+			"integration": "Reviewed for project relevance; no upstream text copied or redistributed."
+		},
+		{
+			"name": "better-auth-security",
+			"repository": "https://github.com/better-auth/skills",
+			"revision": "20c9e88a5c007461a703f1c213572b073196113e",
+			"sourcePath": "security/SKILL.md",
+			"license": "NOASSERTION (repository declares no license; reference only)",
+			"sha256": "042f01c76b63b436c71797c8a1b84470c5b6e0c7cd2400aa0928f733da96facf",
+			"integration": "Reviewed for project relevance; no upstream text copied or redistributed."
+		},
+		{
+			"name": "vercel-react-best-practices",
+			"repository": "https://github.com/vercel-labs/agent-skills",
+			"revision": "063bee94c3f4df8453406c830b0a7df0f2860278",
+			"sourcePath": "skills/react-best-practices/SKILL.md",
+			"license": "MIT (declared in skill metadata; repository has no root license)",
+			"sha256": "71ed7794962fa6e803ee83030517b5b93a9f70fbfeb431ec4535c5480a8d8355",
+			"integration": "Installed to a temporary staging directory, reviewed, then summarized in the consolidated project skill. No upstream file copied."
+		}
+	]
 }
