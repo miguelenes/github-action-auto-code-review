@@ -25,6 +25,9 @@ export interface RolePromptSource {
 export interface ReviewClock {
 	now(): Date;
 }
+export interface ReviewDigest {
+	sha256(value: string): Promise<string>;
+}
 export type ReviewStage = 'review' | 'challenge' | 'fix' | 'verify' | 'publish' | 'complete' | 'needs_human';
 export type ReviewCheckpoint = {
 	jobId: string;
@@ -41,7 +44,14 @@ export interface ReviewPersistence {
 export interface GitHubReviewOperations {
 	getCurrentHead(repository: string, pullRequest: number): Promise<string>;
 	getBoundedDiff(repository: string, pullRequest: number, headSha: string, maxBytes: number): Promise<string>;
-	publishReview(repository: string, pullRequest: number, headSha: string, findings: Finding[]): Promise<void>;
+	/** Upsert a review using idempotencyKey so retries after a successful write cannot create duplicates. */
+	publishReview(
+		repository: string,
+		pullRequest: number,
+		headSha: string,
+		findings: Finding[],
+		idempotencyKey: string,
+	): Promise<void>;
 }
 
 const FindingProposalSchema = z
@@ -246,6 +256,27 @@ export async function resumableIndependentReview(input: {
 
 export type FilePatch = { path: string; content: string };
 const FixVerificationSchema = z.object({ resolved: z.boolean(), reason: z.string().max(5_000) }).strict();
+const FixCheckpointSchema = z
+	.object({
+		inputDigest: z.string().min(1),
+		patches: z.array(z.object({ path: z.string(), content: z.string() }).strict()),
+	})
+	.strict();
+const FixVerificationCheckpointSchema = z.object({ resolved: z.boolean(), inputDigest: z.string().min(1) }).strict();
+const PublishCheckpointSchema = z
+	.object({ inputDigest: z.string().min(1), idempotencyKey: z.string().min(1) })
+	.strict();
+
+function stableJson(value: unknown): string {
+	if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'null';
+	if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+	const entries = Object.entries(value).sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+	return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(',')}}`;
+}
+
+async function inputDigest(digest: ReviewDigest, value: unknown): Promise<string> {
+	return digest.sha256(stableJson(value));
+}
 
 export function parseFilePatches(text: string, allowed: ReadonlySet<string>): FilePatch[] {
 	const parsed: unknown = JSON.parse(text.replace(/^\s*```(?:json)?|\s*```\s*$/g, ''));
@@ -288,6 +319,47 @@ export async function proposeFixes(input: {
 	return parseFilePatches(response, input.allowed);
 }
 
+export async function resumableProposeFixes(
+	input: Parameters<typeof proposeFixes>[0] & {
+		jobId: string;
+		headSha: string;
+		persistence: ReviewPersistence;
+		clock: ReviewClock;
+		digest: ReviewDigest;
+	},
+): Promise<FilePatch[]> {
+	const cached = await input.persistence.getCheckpoint(input.jobId, 'fix');
+	const currentDigest = await inputDigest(input.digest, {
+		stage: 'fix-v1',
+		findings: input.findings,
+		diff: input.diff,
+		sourceFiles: input.sourceFiles,
+		model: input.model,
+		allowed: [...input.allowed].sort(),
+		rolePrompts: input.rolePrompts,
+	});
+	if (cached?.headSha === input.headSha) {
+		const result = FixCheckpointSchema.safeParse(cached.payload);
+		if (result.success && result.data.inputDigest === currentDigest) {
+			try {
+				return parseFilePatches(JSON.stringify(result.data.patches), input.allowed);
+			} catch {
+				// Corrupted or unsafe cached data is treated as a miss and regenerated through validation.
+			}
+		}
+	}
+	const patches = await proposeFixes(input);
+	await input.persistence.putCheckpoint({
+		jobId: input.jobId,
+		headSha: input.headSha,
+		stage: 'fix',
+		revision: (cached?.revision ?? 0) + 1,
+		payload: { inputDigest: currentDigest, patches },
+		updatedAt: input.clock.now().toISOString(),
+	});
+	return patches;
+}
+
 export async function verifyFixes(input: {
 	findings: Finding[];
 	patches: FilePatch[];
@@ -309,4 +381,79 @@ export async function verifyFixes(input: {
 	} catch {
 		return false;
 	}
+}
+
+export async function resumableVerifyFixes(
+	input: Parameters<typeof verifyFixes>[0] & {
+		jobId: string;
+		headSha: string;
+		persistence: ReviewPersistence;
+		clock: ReviewClock;
+		digest: ReviewDigest;
+	},
+): Promise<boolean> {
+	const cached = await input.persistence.getCheckpoint(input.jobId, 'verify');
+	const currentDigest = await inputDigest(input.digest, {
+		stage: 'verify-v1',
+		findings: input.findings,
+		patches: input.patches,
+		sourceFiles: input.sourceFiles,
+		model: input.model,
+		rolePrompts: input.rolePrompts,
+	});
+	if (cached?.headSha === input.headSha) {
+		const result = FixVerificationCheckpointSchema.safeParse(cached.payload);
+		if (result.success && result.data.inputDigest === currentDigest) return result.data.resolved;
+	}
+	const resolved = await verifyFixes(input);
+	await input.persistence.putCheckpoint({
+		jobId: input.jobId,
+		headSha: input.headSha,
+		stage: 'verify',
+		revision: (cached?.revision ?? 0) + 1,
+		payload: { resolved, inputDigest: currentDigest },
+		updatedAt: input.clock.now().toISOString(),
+	});
+	return resolved;
+}
+
+/**
+ * Publish only after rechecking the immutable PR head. Adapters should make publication idempotent by
+ * repository, PR, and head SHA so a crash after the GitHub write but before checkpoint persistence is safe.
+ */
+export async function resumablePublishReview(input: {
+	jobId: string;
+	repository: string;
+	pullRequest: number;
+	headSha: string;
+	findings: Finding[];
+	github: GitHubReviewOperations;
+	persistence: ReviewPersistence;
+	clock: ReviewClock;
+	digest: ReviewDigest;
+}): Promise<void> {
+	const currentHead = await input.github.getCurrentHead(input.repository, input.pullRequest);
+	if (currentHead !== input.headSha) throw new Error('pull request head changed before review publication');
+	const cached = await input.persistence.getCheckpoint(input.jobId, 'publish');
+	const currentDigest = await inputDigest(input.digest, {
+		stage: 'publish-v1',
+		repository: input.repository,
+		pullRequest: input.pullRequest,
+		headSha: input.headSha,
+		findings: input.findings,
+	});
+	const idempotencyKey = `review:${input.jobId}:${input.headSha}`;
+	if (cached?.headSha === input.headSha) {
+		const result = PublishCheckpointSchema.safeParse(cached.payload);
+		if (result.success && result.data.inputDigest === currentDigest) return;
+	}
+	await input.github.publishReview(input.repository, input.pullRequest, input.headSha, input.findings, idempotencyKey);
+	await input.persistence.putCheckpoint({
+		jobId: input.jobId,
+		headSha: input.headSha,
+		stage: 'publish',
+		revision: (cached?.revision ?? 0) + 1,
+		payload: { inputDigest: currentDigest, idempotencyKey },
+		updatedAt: input.clock.now().toISOString(),
+	});
 }

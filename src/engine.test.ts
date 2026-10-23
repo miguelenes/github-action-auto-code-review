@@ -1,8 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import {
 	independentReview,
 	resumableIndependentReview,
+	resumableProposeFixes,
+	resumablePublishReview,
+	resumableVerifyFixes,
 	addedLines,
 	anchorFindings,
 	parseFilePatches,
@@ -14,6 +18,7 @@ import {
 
 const model = (id: string) => ({ provider: 'groq', id }) as Model;
 const clock = { now: () => new Date('2026-01-02T03:04:05.000Z') };
+const digest = { sha256: async (value: string) => createHash('sha256').update(value).digest('hex') };
 const evidence = {
 	severity: 'high',
 	category: 'security',
@@ -129,6 +134,148 @@ test('checkpointed reviews resume after reviewer work and invalidate checkpoints
 		},
 	});
 	assert.deepEqual(newHeadCalls.sort(), ['challenger', 'reviewer', 'security']);
+});
+
+test('fix, verification, and publication stages resume from head-bound checkpoints', async () => {
+	const checkpoints = new Map<string, ReviewCheckpoint>();
+	const persistence = {
+		async getCheckpoint(jobId: string, stage: ReviewCheckpoint['stage']) {
+			return checkpoints.get(`${jobId}:${stage}`);
+		},
+		async putCheckpoint(checkpoint: ReviewCheckpoint) {
+			checkpoints.set(`${checkpoint.jobId}:${checkpoint.stage}`, checkpoint);
+		},
+	};
+	const common = { jobId: 'job-2', headSha: 'head-1', persistence, clock, digest };
+	let fixerCalls = 0;
+	const fixInput = {
+		...common,
+		findings: [],
+		diff: '+ changed',
+		sourceFiles: { 'src/route.ts': 'before' },
+		model: model('fixer'),
+		allowed: new Set(['src/route.ts']),
+		rolePrompts: { fixer: 'fix' },
+		complete: async () => {
+			fixerCalls++;
+			return '[{"path":"src/route.ts","content":"after"}]';
+		},
+	};
+	const firstPatches = await resumableProposeFixes(fixInput);
+	const resumedPatches = await resumableProposeFixes({
+		...fixInput,
+		complete: async () => {
+			throw new Error('cached fixes should not call inference');
+		},
+	});
+	assert.deepEqual(resumedPatches, firstPatches);
+	assert.equal(fixerCalls, 1);
+	await resumableProposeFixes({
+		...fixInput,
+		sourceFiles: { 'src/route.ts': 'changed input' },
+	});
+	assert.equal(fixerCalls, 2);
+	const cachedFix = checkpoints.get('job-2:fix')!;
+	checkpoints.set('job-2:fix', {
+		...cachedFix,
+		payload: {
+			...(cachedFix.payload as { inputDigest: string }),
+			patches: [{ path: '../outside', content: 'unsafe cached patch' }],
+		},
+	});
+	await resumableProposeFixes({
+		...fixInput,
+		sourceFiles: { 'src/route.ts': 'changed input' },
+	});
+	assert.equal(fixerCalls, 3);
+
+	let verifierCalls = 0;
+	const verifyInput = {
+		...common,
+		findings: [],
+		patches: firstPatches,
+		sourceFiles: fixInput.sourceFiles,
+		model: model('verifier'),
+		rolePrompts: { verifier: 'verify' },
+		complete: async () => {
+			verifierCalls++;
+			return '{"resolved":true,"reason":"fixed"}';
+		},
+	};
+	assert.equal(await resumableVerifyFixes(verifyInput), true);
+	assert.equal(
+		await resumableVerifyFixes({
+			...verifyInput,
+			complete: async () => {
+				throw new Error('cached verification expected');
+			},
+		}),
+		true,
+	);
+	assert.equal(verifierCalls, 1);
+	assert.equal(
+		await resumableVerifyFixes({
+			...verifyInput,
+			patches: [{ path: 'src/route.ts', content: 'different patch' }],
+		}),
+		true,
+	);
+	assert.equal(verifierCalls, 2);
+
+	let publications = 0;
+	const github = {
+		async getCurrentHead() {
+			return 'head-1';
+		},
+		async getBoundedDiff() {
+			return '+ changed';
+		},
+		async publishReview() {
+			publications++;
+		},
+	};
+	const publishInput = {
+		...common,
+		repository: 'owner/repository',
+		pullRequest: 42,
+		findings: [],
+		github,
+	};
+	await resumablePublishReview(publishInput);
+	await resumablePublishReview(publishInput);
+	assert.equal(publications, 1);
+	await assert.rejects(
+		resumablePublishReview({ ...publishInput, github: { ...github, getCurrentHead: async () => 'head-2' } }),
+		/pull request head changed/,
+	);
+
+	let failedCheckpointWrite = true;
+	const publicationKeys = new Set<string>();
+	const failurePersistence = {
+		...persistence,
+		async putCheckpoint(checkpoint: ReviewCheckpoint) {
+			if (checkpoint.stage === 'publish' && failedCheckpointWrite) {
+				failedCheckpointWrite = false;
+				throw new Error('checkpoint write failed after the GitHub write');
+			}
+			await persistence.putCheckpoint(checkpoint);
+		},
+	};
+	const idempotentGithub = {
+		...github,
+		async publishReview(_repository: string, _pr: number, _sha: string, _findings: unknown[], key: string) {
+			publicationKeys.add(key);
+		},
+	};
+	const crashWindowInput = {
+		...publishInput,
+		jobId: 'job-3',
+		persistence: failurePersistence,
+		github: idempotentGithub,
+	};
+	await assert.rejects(resumablePublishReview(crashWindowInput), /checkpoint write failed/);
+	await resumablePublishReview(crashWindowInput);
+	assert.equal(publicationKeys.size, 1);
 });
 
 test('engine anchoring accepts only findings on added lines', () => {
