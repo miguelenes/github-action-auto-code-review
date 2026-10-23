@@ -103,6 +103,7 @@ test('checkpointed reviews resume after reviewer work and invalidate checkpoints
 		rolePrompts: { reviewer: 'review prompt', challenger: 'challenge prompt' },
 		persistence,
 		clock,
+		digest,
 		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
 			firstCalls.push(selected.id);
 			if (selected.id === 'challenger' && failChallenge) throw new Error('temporary provider failure');
@@ -134,6 +135,56 @@ test('checkpointed reviews resume after reviewer work and invalidate checkpoints
 		},
 	});
 	assert.deepEqual(newHeadCalls.sort(), ['challenger', 'reviewer', 'security']);
+});
+
+test('same-head review checkpoints are invalidated when evidence, prompts, or selected models change', async () => {
+	const checkpoints = new Map<string, ReviewCheckpoint>();
+	const persistence = {
+		async getCheckpoint(jobId: string, stage: ReviewCheckpoint['stage']) {
+			return checkpoints.get(`${jobId}:${stage}`);
+		},
+		async putCheckpoint(checkpoint: ReviewCheckpoint) {
+			checkpoints.set(`${checkpoint.jobId}:${checkpoint.stage}`, checkpoint);
+		},
+	};
+	const calls: string[] = [];
+	const input = {
+		jobId: 'same-head-job',
+		headSha: 'same-head',
+		diff: '+ changed line',
+		models: [model('reviewer'), model('security'), model('challenger')],
+		evidenceContext: 'requirement v1',
+		rolePrompts: { reviewer: 'review v1', challenger: 'challenge v1' },
+		persistence,
+		clock,
+		digest,
+		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
+			calls.push(selected.id);
+			return JSON.stringify([evidence]);
+		},
+	};
+	await resumableIndependentReview(input);
+	assert.deepEqual(calls.sort(), ['challenger', 'reviewer', 'security']);
+	calls.length = 0;
+	await resumableIndependentReview({
+		...input,
+		evidenceContext: 'requirement v2',
+		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
+			calls.push(selected.id);
+			return JSON.stringify([evidence]);
+		},
+	});
+	assert.deepEqual(calls.sort(), ['challenger', 'reviewer', 'security']);
+	calls.length = 0;
+	await resumableIndependentReview({
+		...input,
+		models: [model('reviewer-v2'), model('security-v2'), model('challenger-v2')],
+		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
+			calls.push(selected.id);
+			return JSON.stringify([evidence]);
+		},
+	});
+	assert.deepEqual(calls.sort(), ['challenger-v2', 'reviewer-v2', 'security-v2']);
 });
 
 test('fix, verification, and publication stages resume from head-bound checkpoints', async () => {

@@ -61,7 +61,7 @@ export async function independentReview(
 		complete,
 		clock,
 	};
-	return checkpoint ? resumableIndependentReview({ ...input, ...checkpoint }) : runIndependentReview(input);
+	return checkpoint ? resumableIndependentReview({ ...input, ...checkpoint, digest }) : runIndependentReview(input);
 }
 
 export async function proposeFixes(
