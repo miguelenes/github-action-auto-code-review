@@ -227,9 +227,6 @@ test('fix, verification, and publication stages resume from head-bound checkpoin
 		async getCurrentHead() {
 			return 'head-1';
 		},
-		async getBoundedDiff() {
-			return '+ changed';
-		},
 		async publishReview() {
 			publications++;
 		},
@@ -244,6 +241,8 @@ test('fix, verification, and publication stages resume from head-bound checkpoin
 	await resumablePublishReview(publishInput);
 	await resumablePublishReview(publishInput);
 	assert.equal(publications, 1);
+	await resumablePublishReview({ ...publishInput, publicationContext: { resolved: true } });
+	assert.equal(publications, 2);
 	await assert.rejects(
 		resumablePublishReview({ ...publishInput, github: { ...github, getCurrentHead: async () => 'head-2' } }),
 		/pull request head changed/,

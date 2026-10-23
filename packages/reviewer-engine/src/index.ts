@@ -38,12 +38,11 @@ export type ReviewCheckpoint = {
 	updatedAt: string;
 };
 export interface ReviewPersistence {
-	getCheckpoint(jobId: string, stage: ReviewStage): Promise<ReviewCheckpoint | undefined>;
+	getCheckpoint(jobId: string, stage: ReviewStage, headSha?: string): Promise<ReviewCheckpoint | undefined>;
 	putCheckpoint(checkpoint: ReviewCheckpoint): Promise<void>;
 }
 export interface GitHubReviewOperations {
 	getCurrentHead(repository: string, pullRequest: number): Promise<string>;
-	getBoundedDiff(repository: string, pullRequest: number, headSha: string, maxBytes: number): Promise<string>;
 	/** Upsert a review using idempotencyKey so retries after a successful write cannot create duplicates. */
 	publishReview(
 		repository: string,
@@ -192,7 +191,7 @@ export async function resumableIndependentReview(input: {
 		evidenceContext +
 		'\nDiff:\n' +
 		diff;
-	const cachedReview = await input.persistence.getCheckpoint(input.jobId, 'review');
+	const cachedReview = await input.persistence.getCheckpoint(input.jobId, 'review', input.headSha);
 	let proposals: Partial<Finding>[];
 	if (cachedReview?.headSha === input.headSha && Array.isArray(cachedReview.payload)) {
 		proposals = parseFindings(JSON.stringify(cachedReview.payload));
@@ -217,7 +216,7 @@ export async function resumableIndependentReview(input: {
 		});
 	}
 	if (!proposals.length) return { findings: [], used: usable.slice(0, 2), disputed: 0 };
-	const cachedChallenge = await input.persistence.getCheckpoint(input.jobId, 'challenge');
+	const cachedChallenge = await input.persistence.getCheckpoint(input.jobId, 'challenge', input.headSha);
 	let confirmations: Partial<Finding>[];
 	if (cachedChallenge?.headSha === input.headSha && Array.isArray(cachedChallenge.payload)) {
 		confirmations = parseFindings(JSON.stringify(cachedChallenge.payload));
@@ -328,7 +327,7 @@ export async function resumableProposeFixes(
 		digest: ReviewDigest;
 	},
 ): Promise<FilePatch[]> {
-	const cached = await input.persistence.getCheckpoint(input.jobId, 'fix');
+	const cached = await input.persistence.getCheckpoint(input.jobId, 'fix', input.headSha);
 	const currentDigest = await inputDigest(input.digest, {
 		stage: 'fix-v1',
 		findings: input.findings,
@@ -392,7 +391,7 @@ export async function resumableVerifyFixes(
 		digest: ReviewDigest;
 	},
 ): Promise<boolean> {
-	const cached = await input.persistence.getCheckpoint(input.jobId, 'verify');
+	const cached = await input.persistence.getCheckpoint(input.jobId, 'verify', input.headSha);
 	const currentDigest = await inputDigest(input.digest, {
 		stage: 'verify-v1',
 		findings: input.findings,
@@ -427,6 +426,7 @@ export async function resumablePublishReview(input: {
 	pullRequest: number;
 	headSha: string;
 	findings: Finding[];
+	publicationContext?: unknown;
 	github: GitHubReviewOperations;
 	persistence: ReviewPersistence;
 	clock: ReviewClock;
@@ -434,13 +434,14 @@ export async function resumablePublishReview(input: {
 }): Promise<void> {
 	const currentHead = await input.github.getCurrentHead(input.repository, input.pullRequest);
 	if (currentHead !== input.headSha) throw new Error('pull request head changed before review publication');
-	const cached = await input.persistence.getCheckpoint(input.jobId, 'publish');
+	const cached = await input.persistence.getCheckpoint(input.jobId, 'publish', input.headSha);
 	const currentDigest = await inputDigest(input.digest, {
 		stage: 'publish-v1',
 		repository: input.repository,
 		pullRequest: input.pullRequest,
 		headSha: input.headSha,
 		findings: input.findings,
+		publicationContext: input.publicationContext ?? null,
 	});
 	const idempotencyKey = `review:${input.jobId}:${input.headSha}`;
 	if (cached?.headSha === input.headSha) {

@@ -1,6 +1,7 @@
 import type { Octokit } from '@octokit/rest';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import type { ReviewCheckpoint, ReviewPersistence, ReviewStage } from '@miguelenes/reviewer-engine';
 export type JournalEntry = {
 	pr: number;
 	sha: string;
@@ -12,6 +13,7 @@ export type JournalEntry = {
 	fixShas?: string[];
 	forkRemediationAuthorized?: boolean;
 	remediationPrs?: number[];
+	checkpoints?: ReviewCheckpoint[];
 };
 type Journal = { version: 1; entries: JournalEntry[] };
 const JournalEntrySchema = z
@@ -26,6 +28,21 @@ const JournalEntrySchema = z
 		fixShas: z.array(z.string().min(1).max(128)).optional(),
 		forkRemediationAuthorized: z.boolean().optional(),
 		remediationPrs: z.array(z.number().int().positive()).optional(),
+		checkpoints: z
+			.array(
+				z
+					.object({
+						jobId: z.string().min(1).max(256),
+						headSha: z.string().min(1).max(128),
+						stage: z.enum(['review', 'challenge', 'fix', 'verify', 'publish', 'complete', 'needs_human']),
+						revision: z.number().int().positive(),
+						payload: z.unknown(),
+						updatedAt: z.string().datetime(),
+					})
+					.strict(),
+			)
+			.max(12)
+			.optional(),
 	})
 	.strict();
 const JournalSchema = z.object({ version: z.literal(1), entries: z.array(JournalEntrySchema) }).strict();
@@ -310,4 +327,58 @@ export async function finishReviewRound(
 		}
 	}
 	throw new Error('could not finalize review state after concurrent updates');
+}
+
+/** Persist bounded engine checkpoints on the repository's fenced state branch. */
+export function createReviewPersistence(
+	api: Octokit,
+	owner: string,
+	repo: string,
+	pr: number,
+	leaseId: string,
+	maxRetries = 8,
+): ReviewPersistence {
+	const activeEntry = (entries: JournalEntry[]) =>
+		entries.find((entry) => entry.pr === pr && entry.status === 'started' && entry.leaseId === leaseId);
+	return {
+		async getCheckpoint(jobId: string, stage: ReviewStage, headSha?: string) {
+			const current = await read(api, owner, repo);
+			if (!current) throw new Error('review journal missing while reading checkpoint');
+			const entry = activeEntry(current.journal.entries);
+			if (!entry) throw new Error('review lease was lost or superseded');
+			return entry.checkpoints?.find(
+				(checkpoint) =>
+					checkpoint.jobId === jobId && checkpoint.stage === stage && (!headSha || checkpoint.headSha === headSha),
+			);
+		},
+		async putCheckpoint(checkpoint: ReviewCheckpoint) {
+			if (Buffer.byteLength(JSON.stringify(checkpoint)) > 750_000)
+				throw new Error('review checkpoint exceeds the 750 KB state-branch limit');
+			for (let attempt = 0; attempt < maxRetries; attempt++) {
+				const prior = await read(api, owner, repo);
+				if (!prior) throw new Error('review journal missing while writing checkpoint');
+				const entries = [...prior.journal.entries];
+				const index = entries.findIndex(
+					(entry) => entry.pr === pr && entry.status === 'started' && entry.leaseId === leaseId,
+				);
+				if (index < 0) throw new Error('review lease was lost or superseded');
+				const entry = entries[index]!;
+				const checkpoints = (entry.checkpoints ?? []).filter(
+					(item) =>
+						item.jobId !== checkpoint.jobId || item.stage !== checkpoint.stage || item.headSha !== checkpoint.headSha,
+				);
+				checkpoints.push(checkpoint);
+				entries[index] = { ...entry, checkpoints: checkpoints.slice(-12) };
+				try {
+					await write(api, owner, repo, prior, { version: 1, entries });
+					return;
+				} catch (error) {
+					const status = (error as { status?: number }).status;
+					if (status === 409 || status === 422) continue;
+					throw error;
+				}
+			}
+			throw new Error('could not persist review checkpoint after concurrent state updates');
+		},
+	};
 }

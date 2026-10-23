@@ -1,9 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Octokit } from '@octokit/rest';
+import type { ReviewCheckpoint } from '@miguelenes/reviewer-engine';
 import {
 	reserveReviewRound,
 	finishReviewRound,
+	createReviewPersistence,
 	attachFixCommit,
 	refreshReviewLease,
 	authorizeForkRemediation,
@@ -65,6 +67,36 @@ function fakeApi() {
 	};
 	return api as unknown as Octokit;
 }
+test('engine checkpoints survive review-lease recovery and reject superseded writers', async () => {
+	const api = fakeApi();
+	const first = await reserveReviewRound(api, 'o', 'r', 12, 'head-1');
+	assert.equal(first.execute, true);
+	if (!first.execute) return;
+	const checkpoint: ReviewCheckpoint = {
+		jobId: 'o/r#12:1',
+		headSha: 'head-1',
+		stage: 'review',
+		revision: 1,
+		payload: [{ title: 'validated proposal' }],
+		updatedAt: '2026-10-23T07:00:00.000Z',
+	};
+	const firstPersistence = createReviewPersistence(api, 'o', 'r', 12, first.leaseId);
+	await firstPersistence.putCheckpoint(checkpoint);
+	assert.deepEqual(await firstPersistence.getCheckpoint(checkpoint.jobId, checkpoint.stage), checkpoint);
+
+	const resumed = await reserveReviewRound(api, 'o', 'r', 12, 'head-1', 8, 60 * 60 * 1000, true);
+	assert.equal(resumed.execute, true);
+	if (!resumed.execute) return;
+	const resumedPersistence = createReviewPersistence(api, 'o', 'r', 12, resumed.leaseId);
+	assert.deepEqual(await resumedPersistence.getCheckpoint(checkpoint.jobId, checkpoint.stage), checkpoint);
+	await assert.rejects(firstPersistence.putCheckpoint({ ...checkpoint, revision: 2 }), /lease was lost or superseded/);
+	await resumedPersistence.putCheckpoint({ ...checkpoint, revision: 2 });
+	assert.equal((await resumedPersistence.getCheckpoint(checkpoint.jobId, checkpoint.stage))?.revision, 2);
+	const fixCheckpoint = { ...checkpoint, headSha: 'fix-head', revision: 1 };
+	await resumedPersistence.putCheckpoint(fixCheckpoint);
+	assert.equal((await resumedPersistence.getCheckpoint(checkpoint.jobId, checkpoint.stage, 'head-1'))?.revision, 2);
+	assert.equal((await resumedPersistence.getCheckpoint(checkpoint.jobId, checkpoint.stage, 'fix-head'))?.revision, 1);
+});
 test('review journal claims each new head once and enforces five PR rounds', async () => {
 	const api = fakeApi();
 	const first = await reserveReviewRound(api, 'o', 'r', 7, 'a');

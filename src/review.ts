@@ -1,4 +1,6 @@
 import type { Octokit } from '@octokit/rest';
+import { createHash } from 'node:crypto';
+import { resumablePublishReview } from '@miguelenes/reviewer-engine';
 import { CatalogAdapter, getOpenRouterSpendGuard } from './providers.js';
 import { independentReview, proposeFixes, verifyFixes } from './agents.js';
 import { applyPatches, createForkRemediationPullRequest, validateCommit, enableNativeAutoMerge } from './executor.js';
@@ -6,6 +8,7 @@ import { applyVerifiedFreeOffers, applyVerifiedTrialOffers, loadTrustedConfig } 
 import {
 	attachFixCommit,
 	attachRemediationPullRequest,
+	createReviewPersistence,
 	forkRemediationAuthorized,
 	refreshReviewLease,
 } from './state.js';
@@ -59,6 +62,105 @@ export async function publishSummary(
 	if (previous)
 		await api.issues.updateComment({ owner: target.owner, repo: target.repo, comment_id: previous.id, body });
 	else await api.issues.createComment({ owner: target.owner, repo: target.repo, issue_number: target.pr, body });
+}
+export async function publishFindingReview(
+	api: Octokit,
+	target: Repo,
+	round: number,
+	disclosure: string,
+	findings: Finding[],
+	beforeWrite?: () => Promise<void>,
+): Promise<void> {
+	const marker = `<!-- open-source-agent-reviewer:${round}:${target.sha} -->`;
+	const previousReviews = await api.paginate(api.pulls.listReviews, {
+		owner: target.owner,
+		repo: target.repo,
+		pull_number: target.pr,
+		per_page: 100,
+	});
+	if (previousReviews.some((review) => review.commit_id === target.sha && review.body?.includes(marker))) return;
+	await beforeWrite?.();
+	await api.pulls.createReview({
+		owner: target.owner,
+		repo: target.repo,
+		pull_number: target.pr,
+		commit_id: target.sha,
+		event: 'REQUEST_CHANGES',
+		body: `${marker}\n${disclosure}`,
+		comments: findings.slice(0, 100).map((finding) => ({
+			path: finding.path,
+			line: finding.line,
+			side: 'RIGHT' as const,
+			body: `**${finding.severity.toUpperCase()} — ${finding.title}**\n\nCategory: ${finding.category}\n\n${finding.impact}\n\nSuggested remediation: ${finding.remediation}\n\nEvidence: ${finding.evidence}`,
+		})),
+	});
+}
+export async function publishAdditionalFindings(
+	api: Octokit,
+	target: Repo,
+	round: number,
+	findings: Finding[],
+	beforeWrite?: () => Promise<void>,
+): Promise<void> {
+	const marker = `<!-- open-source-agent-reviewer-overflow:${round}:${target.sha} -->`;
+	const comments = await api.paginate(api.issues.listComments, {
+		owner: target.owner,
+		repo: target.repo,
+		issue_number: target.pr,
+		per_page: 100,
+	});
+	const previous = comments.find((comment) => comment.body?.includes(marker));
+	const remainder = findings
+		.map(
+			(finding) =>
+				`- ${finding.severity.toUpperCase()} [${finding.category}] ${finding.path}:${finding.line}: ${finding.title} — ${finding.impact}`,
+		)
+		.join('\n');
+	await beforeWrite?.();
+	if (previous)
+		await api.issues.updateComment({
+			owner: target.owner,
+			repo: target.repo,
+			comment_id: previous.id,
+			body: `${marker}\nAdditional verified findings omitted from inline review due to GitHub's comment limit:\n${remainder}`,
+		});
+	else
+		await api.issues.createComment({
+			owner: target.owner,
+			repo: target.repo,
+			issue_number: target.pr,
+			body: `${marker}\nAdditional verified findings omitted from inline review due to GitHub's comment limit:\n${remainder}`,
+		});
+}
+async function publishMarkedComment(
+	api: Octokit,
+	target: Repo,
+	marker: string,
+	body: string,
+	beforeWrite?: () => Promise<void>,
+): Promise<void> {
+	const comments = await api.paginate(api.issues.listComments, {
+		owner: target.owner,
+		repo: target.repo,
+		issue_number: target.pr,
+		per_page: 100,
+	});
+	const previous = comments.find((comment) => comment.body?.includes(marker));
+	await beforeWrite?.();
+	if (previous)
+		await api.issues.updateComment({
+			owner: target.owner,
+			repo: target.repo,
+			comment_id: previous.id,
+			body: `${marker}\n${body}`,
+		});
+	else
+		await api.issues.createComment({
+			owner: target.owner,
+			repo: target.repo,
+			issue_number: target.pr,
+			body: `${marker}\n${body}`,
+		});
 }
 export function addedLines(diff: string): Map<string, Set<number>> {
 	return changedLines(diff);
@@ -157,6 +259,11 @@ export async function reviewPullRequest(
 				throw new Error('stale remediation pull request before write');
 		}
 	};
+	const checkpoint = {
+		jobId: `${target.owner}/${target.repo}#${target.pr}:${round}`,
+		headSha: target.sha,
+		persistence: createReviewPersistence(api, target.owner, target.repo, target.pr, leaseId),
+	};
 	const policy = await loadTrustedConfig(api, target.owner, target.repo, pr.base.sha);
 	if (policy.mode !== mode) throw new Error('configured execution mode does not match this review adapter');
 	if (!policy.providers.length) throw new Error('no inference providers are enabled by trusted base policy');
@@ -200,7 +307,11 @@ export async function reviewPullRequest(
 	const probeCandidates = capabilityCandidates(eligibleModels, policy.preferredModels, requiredContext, now);
 	const assessedCandidates = await assessReviewCapabilities(probeCandidates);
 	const candidates = selectReviewModels(assessedCandidates, policy.preferredModels, requiredContext, now);
-	const { findings, used, disputed: initialDisputed } = await independentReview(diff, candidates, supplement.context);
+	const {
+		findings,
+		used,
+		disputed: initialDisputed,
+	} = await independentReview(diff, candidates, supplement.context, undefined, checkpoint);
 	let disputed = initialDisputed;
 	const modelUses = new Map<string, { model: Model; roles: string[] }>();
 	const noteModel = (model: Model, role: string) => {
@@ -229,36 +340,10 @@ export async function reviewPullRequest(
 		: `Evidence coverage incomplete: ${supplement.omissions.join('; ')}. Merge readiness is blocked.`;
 	const disclosure = `${modelDisclosure}\n${coverageDisclosure}`;
 	if (valid.length) {
-		await prepareWrite(target.sha);
-		await api.pulls.createReview({
-			owner: target.owner,
-			repo: target.repo,
-			pull_number: target.pr,
-			commit_id: target.sha,
-			event: 'REQUEST_CHANGES',
-			body: disclosure,
-			comments: valid.slice(0, 100).map((f) => ({
-				path: f.path,
-				line: f.line,
-				side: 'RIGHT' as const,
-				body: `**${f.severity.toUpperCase()} — ${f.title}**\n\nCategory: ${f.category}\n\n${f.impact}\n\nSuggested remediation: ${f.remediation}\n\nEvidence: ${f.evidence}`,
-			})),
-		});
-		if (valid.length > 100) {
-			const remainder = valid
-				.slice(100)
-				.map((f) => `- ${f.severity.toUpperCase()} [${f.category}] ${f.path}:${f.line}: ${f.title} — ${f.impact}`)
-				.join('\n');
-			await prepareWrite(target.sha);
-			await api.issues.createComment({
-				owner: target.owner,
-				repo: target.repo,
-				issue_number: target.pr,
-				body: `Additional verified findings omitted from inline review due to GitHub's comment limit:\n${remainder}`,
-			});
-		}
+		await publishFindingReview(api, target, round, disclosure, valid, () => prepareWrite(target.sha));
+		if (valid.length > 100)
+			await publishAdditionalFindings(api, target, round, valid.slice(100), () => prepareWrite(target.sha));
 	} else if (rejected || disputed || !supplement.complete) {
-		await prepareWrite(target.sha);
 		const blockers = [
 			rejected ? `${rejected} proposed finding(s) could not be anchored to added lines` : undefined,
 			disputed ? `${disputed} reviewer finding(s) remain disputed by the challenger` : undefined,
@@ -266,20 +351,21 @@ export async function reviewPullRequest(
 		]
 			.filter(Boolean)
 			.join('; ');
-		await api.issues.createComment({
-			owner: target.owner,
-			repo: target.repo,
-			issue_number: target.pr,
-			body: `${disclosure}\n\nReview is blocked: ${blockers}. A maintainer must assess this result; auto-merge is blocked.`,
-		});
+		await publishMarkedComment(
+			api,
+			target,
+			`<!-- open-source-agent-reviewer-status:${round}:${target.sha}:blocked -->`,
+			`${disclosure}\n\nReview is blocked: ${blockers}. A maintainer must assess this result; auto-merge is blocked.`,
+			() => prepareWrite(target.sha),
+		);
 	} else {
-		await prepareWrite(target.sha);
-		await api.issues.createComment({
-			owner: target.owner,
-			repo: target.repo,
-			issue_number: target.pr,
-			body: `${disclosure}\n\nNo actionable findings were confirmed. This is not a verified clean bill of health.`,
-		});
+		await publishMarkedComment(
+			api,
+			target,
+			`<!-- open-source-agent-reviewer-status:${round}:${target.sha}:no-findings -->`,
+			`${disclosure}\n\nNo actionable findings were confirmed. This is not a verified clean bill of health.`,
+			() => prepareWrite(target.sha),
+		);
 		if (policy.autoMerge) {
 			const checks = await validateCommit(
 				api,
@@ -332,7 +418,14 @@ export async function reviewPullRequest(
 					throw new Error('finding source cannot be safely patched');
 				sourceFiles[path] = content;
 			}
-			const patches = await proposeFixes(valid, diff, sourceFiles, fixer, new Set(Object.keys(sourceFiles)));
+			const patches = await proposeFixes(
+				valid,
+				diff,
+				sourceFiles,
+				fixer,
+				new Set(Object.keys(sourceFiles)),
+				checkpoint,
+			);
 			const headRepo = pr.head.repo?.full_name?.toLowerCase(),
 				sameRepo = headRepo === `${target.owner}/${target.repo}`.toLowerCase();
 			let fixSha: string,
@@ -386,7 +479,8 @@ export async function reviewPullRequest(
 			if (latest.data.head.sha !== fixSha) throw new Error('PR head changed during validation');
 			const verifier = candidates[4] ?? used[0]!;
 			if (checks.passed) noteModel(verifier, 'fix verifier');
-			const verified = checks.passed && (await verifyFixes(valid, patches, sourceFiles, verifier));
+			const verified =
+				checks.passed && (await verifyFixes(valid, patches, sourceFiles, verifier, { ...checkpoint, headSha: fixSha }));
 			const latestDiff = await api.pulls.get({
 				owner: target.owner,
 				repo: target.repo,
@@ -401,7 +495,13 @@ export async function reviewPullRequest(
 				prBody: latest.data.body,
 				diff: objectText(latestDiff.data),
 			});
-			const finalReview = await independentReview(objectText(latestDiff.data), candidates, fixSupplement.context);
+			const finalReview = await independentReview(
+				objectText(latestDiff.data),
+				candidates,
+				fixSupplement.context,
+				undefined,
+				{ ...checkpoint, headSha: fixSha },
+			);
 			disputed = Math.max(disputed, finalReview.disputed);
 			finalReview.used.forEach((model, index) =>
 				noteModel(model, `post-fix ${['reviewer', 'security reviewer', 'challenger'][index] ?? 'reviewer'}`),
@@ -454,18 +554,39 @@ export async function reviewPullRequest(
 		.map(({ model, roles }) => `${model.provider}/${model.id} [${roles.join(', ')}; ${reasonFor(model)}]`)
 		.join('; ');
 	const finalCoverage = coverageComplete ? 'complete' : 'incomplete';
-	await publishSummary(
-		api,
-		{ ...target, sha: summarySha },
-		round,
-		model,
-		valid,
-		finalCoverage,
-		resolved,
-		resolved
-			? `All available review, fix, and verification steps completed.${remediationUrl ? ` Bot-owned remediation PR: ${remediationUrl}.` : ''}`
-			: `Blocking state: ${[disputed ? `${disputed} reviewer finding(s) remain disputed by the challenger` : undefined, finalCoverage === 'incomplete' ? 'evidence coverage is incomplete' : undefined, valid.length ? 'validated findings remain unresolved' : undefined, readinessBlocker].filter(Boolean).join('; ') || 'review or validation did not establish readiness'}.${remediationUrl ? ` Remediation PR: ${remediationUrl}.` : ''}`,
-		() => prepareWrite(summarySha),
-	);
+	const summaryDetails = resolved
+		? `All available review, fix, and verification steps completed.${remediationUrl ? ` Bot-owned remediation PR: ${remediationUrl}.` : ''}`
+		: `Blocking state: ${[disputed ? `${disputed} reviewer finding(s) remain disputed by the challenger` : undefined, finalCoverage === 'incomplete' ? 'evidence coverage is incomplete' : undefined, valid.length ? 'validated findings remain unresolved' : undefined, readinessBlocker].filter(Boolean).join('; ') || 'review or validation did not establish readiness'}.${remediationUrl ? ` Remediation PR: ${remediationUrl}.` : ''}`;
+	await resumablePublishReview({
+		jobId: checkpoint.jobId,
+		repository: `${target.owner}/${target.repo}`,
+		pullRequest: target.pr,
+		headSha: summarySha,
+		findings: valid,
+		publicationContext: { model, coverage: finalCoverage, resolved, summaryDetails },
+		github: {
+			async getCurrentHead(repository, pullRequest) {
+				const [owner, repo] = repository.split('/');
+				const current = await api.pulls.get({ owner: owner!, repo: repo!, pull_number: pullRequest });
+				return current.data.head.sha;
+			},
+			async publishReview(_repository, _pullRequest, headSha, findings, idempotencyKey) {
+				await publishSummary(
+					api,
+					{ ...target, sha: headSha },
+					round,
+					model,
+					findings,
+					finalCoverage,
+					resolved,
+					`${idempotencyKey}\n${summaryDetails}`,
+					() => prepareWrite(headSha),
+				);
+			},
+		},
+		persistence: checkpoint.persistence,
+		clock: { now: () => new Date() },
+		digest: { sha256: async (value) => createHash('sha256').update(value).digest('hex') },
+	});
 	return { model, findings: valid, disputed, resolved, coverage: finalCoverage };
 }

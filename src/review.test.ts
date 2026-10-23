@@ -1,6 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { addedLines, anchorFindings, capabilityCandidates, selectReviewModels, publishSummary } from './review.js';
+import {
+	addedLines,
+	anchorFindings,
+	capabilityCandidates,
+	selectReviewModels,
+	publishSummary,
+	publishFindingReview,
+	publishAdditionalFindings,
+} from './review.js';
 import { ModelSchema, type Model } from './core.js';
 test('diff evidence only anchors added lines', () => {
 	const lines = addedLines('diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1,2 +1,3 @@\n old\n+new\n same\n');
@@ -191,4 +199,76 @@ test('summary publishing updates its marker comment and refuses a stale head', a
 		publishSummary(stale, { owner: 'o', repo: 'r', pr: 1, sha: 'head' }, 3, '', [], 'complete', false, 'blocked'),
 		/stale pull request head/,
 	);
+});
+test('inline finding review publication is idempotent for a round and source head', async () => {
+	const reviews: { commit_id: string; body: string }[] = [];
+	let creates = 0;
+	const api = {
+		paginate: async () => reviews,
+		pulls: {
+			listReviews: async () => ({ data: reviews }),
+			async createReview(input: { commit_id: string; body: string }) {
+				creates++;
+				reviews.push({ commit_id: input.commit_id, body: input.body });
+				return { data: {} };
+			},
+		},
+	} as never;
+	const finding = {
+		id: 'a.ts:2:issue',
+		severity: 'high' as const,
+		category: 'correctness' as const,
+		title: 'Issue',
+		path: 'a.ts',
+		line: 2,
+		evidence: 'line 2',
+		impact: 'breaks the retry path',
+		remediation: 'make it idempotent',
+		status: 'open' as const,
+	};
+	await publishFindingReview(api, { owner: 'o', repo: 'r', pr: 1, sha: 'head-1' }, 1, 'model disclosure', [finding]);
+	await publishFindingReview(api, { owner: 'o', repo: 'r', pr: 1, sha: 'head-1' }, 1, 'model disclosure', [finding]);
+	assert.equal(creates, 1);
+	assert.match(reviews[0]!.body, /open-source-agent-reviewer:1:head-1/);
+	await publishFindingReview(api, { owner: 'o', repo: 'r', pr: 1, sha: 'head-2' }, 2, 'model disclosure', [finding]);
+	assert.equal(creates, 2);
+});
+test('overflow findings update their marker comment instead of duplicating on retry', async () => {
+	const comments: { id: number; body: string }[] = [];
+	let creates = 0;
+	let updates = 0;
+	const api = {
+		paginate: async () => comments,
+		issues: {
+			listComments: async () => ({ data: comments }),
+			async createComment(input: { body: string }) {
+				creates++;
+				comments.push({ id: 1, body: input.body });
+				return { data: {} };
+			},
+			async updateComment(input: { body: string }) {
+				updates++;
+				comments[0]!.body = input.body;
+				return { data: {} };
+			},
+		},
+	} as never;
+	const finding = {
+		id: 'a.ts:2:issue',
+		severity: 'high' as const,
+		category: 'correctness' as const,
+		title: 'Issue',
+		path: 'a.ts',
+		line: 2,
+		evidence: 'line 2',
+		impact: 'breaks the retry path',
+		remediation: 'make it idempotent',
+		status: 'open' as const,
+	};
+	const target = { owner: 'o', repo: 'r', pr: 1, sha: 'head-1' };
+	await publishAdditionalFindings(api, target, 1, [finding]);
+	await publishAdditionalFindings(api, target, 1, [{ ...finding, impact: 'still breaks the retry path' }]);
+	assert.equal(creates, 1);
+	assert.equal(updates, 1);
+	assert.match(comments[0]!.body, /still breaks the retry path/);
 });
