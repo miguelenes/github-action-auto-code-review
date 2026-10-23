@@ -7,6 +7,7 @@ import {
 	anchorFindings,
 	parseFilePatches,
 	parseFindings,
+	verifyFixes,
 	type Model,
 	type ReviewCheckpoint,
 } from '@miguelenes/reviewer-engine';
@@ -59,6 +60,22 @@ test('portable findings and patches reject unsafe repository paths and oversized
 			),
 		/unsafe or out-of-scope/,
 	);
+});
+
+test('fix verification accepts only a schema-valid verifier response', async () => {
+	const input = {
+		findings: [],
+		patches: [],
+		sourceFiles: {},
+		model: model('verifier'),
+		rolePrompts: { verifier: 'verify' },
+	};
+	const response = (text: string) => verifyFixes({ ...input, complete: async () => text });
+
+	assert.equal(await response('{"resolved":true,"reason":"All findings are fixed."}'), true);
+	assert.equal(await response('{"resolved":"true","reason":"not a boolean"}'), false);
+	assert.equal(await response('{"resolved":true}'), false);
+	assert.equal(await response('not json'), false);
 });
 
 test('checkpointed reviews resume after reviewer work and invalidate checkpoints for a new head', async () => {

@@ -245,6 +245,8 @@ export async function resumableIndependentReview(input: {
 }
 
 export type FilePatch = { path: string; content: string };
+const FixVerificationSchema = z.object({ resolved: z.boolean(), reason: z.string().max(5_000) }).strict();
+
 export function parseFilePatches(text: string, allowed: ReadonlySet<string>): FilePatch[] {
 	const parsed: unknown = JSON.parse(text.replace(/^\s*```(?:json)?|\s*```\s*$/g, ''));
 	if (!Array.isArray(parsed)) throw new Error('fixer response must be a JSON array');
@@ -301,7 +303,9 @@ export async function verifyFixes(input: {
 		JSON.stringify({ findings: input.findings, sourceFiles: input.sourceFiles, patches: input.patches }),
 	);
 	try {
-		return (JSON.parse(text.replace(/^\s*```(?:json)?|\s*```\s*$/g, '')) as { resolved?: unknown }).resolved === true;
+		const parsed: unknown = JSON.parse(text.replace(/^\s*```(?:json)?|\s*```\s*$/g, ''));
+		const result = FixVerificationSchema.safeParse(parsed);
+		return result.success && result.data.resolved;
 	} catch {
 		return false;
 	}
