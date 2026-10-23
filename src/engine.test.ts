@@ -51,6 +51,30 @@ test('runtime-neutral review stages use injected prompts and inference only', as
 	);
 });
 
+test('review stages accept inference and role-prompt ports', async () => {
+	const calls: string[] = [];
+	const result = await independentReview({
+		diff: '+ vulnerable route',
+		models: [model('reviewer'), model('security'), model('challenger')],
+		rolePromptSource: {
+			async get(role) {
+				return `${role} port prompt`;
+			},
+		},
+		clock,
+		inferencePort: {
+			async complete(selected, system) {
+				calls.push(`${selected.id}:${system}`);
+				return JSON.stringify([evidence]);
+			},
+		},
+	});
+	assert.equal(result.findings.length, 1);
+	assert.equal(calls.length, 3);
+	assert.ok(calls.some((call) => call.endsWith('reviewer port prompt')));
+	assert.ok(calls.some((call) => call.endsWith('challenger port prompt')));
+});
+
 test('portable findings and patches reject unsafe repository paths and oversized content', () => {
 	assert.throws(() => parseFindings(JSON.stringify([{ ...evidence, path: '../secret' }])), /unsafe finding path/);
 	assert.throws(

@@ -89,11 +89,12 @@ export async function completeModel(
 	system: string,
 	prompt: string,
 	fetcher: typeof fetch = fetch,
+	credential?: string,
 ): Promise<string> {
 	const { provider } = model;
 	if (provider === 'github-models')
 		throw new Error('GitHub Models was retired on 2026-07-30; inference is unavailable');
-	const token = tokenFor(provider);
+	const token = credential ?? tokenFor(provider);
 	const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'application/json' };
 	let url: string, body: unknown;
 	if (provider === 'gemini') {

@@ -112,8 +112,11 @@ export interface ProviderAdapter {
 	discover(): Promise<Model[]>;
 	complete(model: string, prompt: string): Promise<string>;
 }
+function freshEvidence(at: string, now: Date): boolean {
+	const observedAt = new Date(at);
+	return now.getTime() - observedAt.getTime() <= 86400000 && observedAt <= now;
+}
 export function trialSpendCapAllows(m: Model, guard: OpenRouterSpendGuard | null | undefined, now: Date): boolean {
-	const fresh = (at: string) => now.getTime() - new Date(at).getTime() <= 86400000 && new Date(at) <= now;
 	if (
 		m.provider !== 'openrouter' ||
 		!guard ||
@@ -131,11 +134,11 @@ export function trialSpendCapAllows(m: Model, guard: OpenRouterSpendGuard | null
 	)
 		return false;
 	if (
-		!fresh(m.priceEvidence.input.observedAt) ||
-		!fresh(m.priceEvidence.output.observedAt) ||
-		!fresh(m.trialCreditEvidence.observedAt) ||
-		!fresh(m.termsEvidence.observedAt) ||
-		!fresh(guard.observedAt)
+		!freshEvidence(m.priceEvidence.input.observedAt, now) ||
+		!freshEvidence(m.priceEvidence.output.observedAt, now) ||
+		!freshEvidence(m.trialCreditEvidence.observedAt, now) ||
+		!freshEvidence(m.termsEvidence.observedAt, now) ||
+		!freshEvidence(guard.observedAt, now)
 	)
 		return false;
 	if (
@@ -156,14 +159,13 @@ export function trialSpendCapAllows(m: Model, guard: OpenRouterSpendGuard | null
 	return guard.limitUsd <= m.trialCreditBudgetUsd && guard.remainingUsd > 0 && guard.remainingUsd <= guard.limitUsd;
 }
 export function eligible(m: Model, now: Date): boolean {
-	const fresh = (at: string) => now.getTime() - new Date(at).getTime() <= 86400000 && new Date(at) <= now;
 	if (
 		!m.priceEvidence.input ||
 		!m.priceEvidence.output ||
 		m.inputUsdPerMillion === null ||
 		m.outputUsdPerMillion === null ||
-		!fresh(m.priceEvidence.input.observedAt) ||
-		!fresh(m.priceEvidence.output.observedAt)
+		!freshEvidence(m.priceEvidence.input.observedAt, now) ||
+		!freshEvidence(m.priceEvidence.output.observedAt, now)
 	)
 		return false;
 	if (
@@ -173,16 +175,20 @@ export function eligible(m: Model, now: Date): boolean {
 		return false;
 	if (!m.priceEvidence.input.claim || !m.priceEvidence.output.claim) return false;
 	if (m.trialExpiresAt && new Date(m.trialExpiresAt) <= now) return false;
-	if (m.termsEvidence && !fresh(m.termsEvidence.observedAt)) return false;
+	if (m.termsEvidence && !freshEvidence(m.termsEvidence.observedAt, now)) return false;
 	if (m.inputUsdPerMillion > 0 || m.outputUsdPerMillion > 0) return trialSpendCapAllows(m, m.spendGuardEvidence, now);
-	if (!m.quotaEvidence || m.quotaEvidence.noChargeAfterLimit !== true || !fresh(m.quotaEvidence.observedAt))
+	if (
+		!m.quotaEvidence ||
+		m.quotaEvidence.noChargeAfterLimit !== true ||
+		!freshEvidence(m.quotaEvidence.observedAt, now)
+	)
 		return false;
 	if (
 		m.provider !== 'openrouter' &&
 		(!m.accountTierEvidence ||
-			!fresh(m.accountTierEvidence.observedAt) ||
+			!freshEvidence(m.accountTierEvidence.observedAt, now) ||
 			!m.termsEvidence ||
-			!fresh(m.termsEvidence.observedAt))
+			!freshEvidence(m.termsEvidence.observedAt, now))
 	)
 		return false;
 	return true;

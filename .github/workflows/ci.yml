@@ -1,7 +1,6 @@
 name: CI
 on:
-  push:
-  pull_request:
+  # Routine validation runs locally with `act` to avoid hosted runner charges.
   workflow_dispatch:
 permissions: {}
 jobs:

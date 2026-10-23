@@ -41,6 +41,25 @@ export interface ReviewPersistence {
 	getCheckpoint(jobId: string, stage: ReviewStage, headSha?: string): Promise<ReviewCheckpoint | undefined>;
 	putCheckpoint(checkpoint: ReviewCheckpoint): Promise<void>;
 }
+
+type InferenceDependency = { complete?: Inference; inferencePort?: InferencePort };
+type PromptDependency = {
+	rolePrompts?: Partial<RolePrompts>;
+	rolePromptSource?: RolePromptSource;
+};
+
+function resolveInference(input: InferenceDependency): Inference {
+	if (input.inferencePort) return input.inferencePort.complete.bind(input.inferencePort);
+	if (input.complete) return input.complete;
+	throw new Error('an inference port is required');
+}
+
+async function resolvePrompt(input: PromptDependency, role: ReviewRole): Promise<string> {
+	if (input.rolePromptSource) return input.rolePromptSource.get(role);
+	const prompt = input.rolePrompts?.[role];
+	if (prompt !== undefined) return prompt;
+	throw new Error(`a role prompt source is required for ${role}`);
+}
 export interface GitHubReviewOperations {
 	getCurrentHead(repository: string, pullRequest: number): Promise<string>;
 	/** Upsert a review using idempotencyKey so retries after a successful write cannot create duplicates. */
@@ -151,8 +170,10 @@ export async function independentReview(input: {
 	diff: string;
 	models: Model[];
 	evidenceContext?: string;
-	rolePrompts: Pick<RolePrompts, 'reviewer' | 'challenger'>;
-	complete: Inference;
+	rolePrompts?: Pick<RolePrompts, 'reviewer' | 'challenger'>;
+	rolePromptSource?: RolePromptSource;
+	complete?: Inference;
+	inferencePort?: InferencePort;
 	clock: ReviewClock;
 }): Promise<{ findings: Finding[]; used: Model[]; disputed: number }> {
 	const persistence: ReviewPersistence = {
@@ -184,14 +205,21 @@ export async function resumableIndependentReview(input: {
 	diff: string;
 	models: Model[];
 	evidenceContext?: string;
-	rolePrompts: Pick<RolePrompts, 'reviewer' | 'challenger'>;
-	complete: Inference;
+	rolePrompts?: Pick<RolePrompts, 'reviewer' | 'challenger'>;
+	rolePromptSource?: RolePromptSource;
+	complete?: Inference;
+	inferencePort?: InferencePort;
 	persistence: ReviewPersistence;
 	clock: ReviewClock;
 	digest: ReviewDigest;
 	persistPrompt?: (prompt: ReviewPrompt) => Promise<void>;
 }): Promise<{ findings: Finding[]; used: Model[]; disputed: number }> {
-	const { diff, models, rolePrompts, complete } = input;
+	const { diff, models } = input;
+	const [[reviewer, challenger], complete] = await Promise.all([
+		Promise.all([resolvePrompt(input, 'reviewer'), resolvePrompt(input, 'challenger')]),
+		Promise.resolve(resolveInference(input)),
+	]);
+	const rolePrompts = { reviewer, challenger };
 	const evidenceContext = input.evidenceContext ?? '';
 	const usable = models.slice(0, 3);
 	if (usable.length < 3)
@@ -344,13 +372,19 @@ export async function proposeFixes(input: {
 	sourceFiles: Record<string, string>;
 	model: Model;
 	allowed: ReadonlySet<string>;
-	rolePrompts: Pick<RolePrompts, 'fixer'>;
-	complete: Inference;
+	rolePrompts?: Pick<RolePrompts, 'fixer'>;
+	rolePromptSource?: RolePromptSource;
+	complete?: Inference;
+	inferencePort?: InferencePort;
 }): Promise<FilePatch[]> {
+	const [fixerPrompt, complete] = await Promise.all([
+		resolvePrompt(input, 'fixer'),
+		Promise.resolve(resolveInference(input)),
+	]);
 	const prompt = JSON.stringify({ findings: input.findings, diff: input.diff, sourceFiles: input.sourceFiles });
-	const response = await input.complete(
+	const response = await complete(
 		input.model,
-		input.rolePrompts.fixer +
+		fixerPrompt +
 			' Return only a JSON array of complete text file replacements in the shape [{"path":"...","content":"..."}]. Change only files containing validated findings; preserve unrelated edits.',
 		prompt,
 	);
@@ -366,6 +400,7 @@ export async function resumableProposeFixes(
 		digest: ReviewDigest;
 	},
 ): Promise<FilePatch[]> {
+	const fixerPrompt = await resolvePrompt(input, 'fixer');
 	const cached = await input.persistence.getCheckpoint(input.jobId, 'fix', input.headSha);
 	const currentDigest = await inputDigest(input.digest, {
 		stage: 'fix-v1',
@@ -374,7 +409,7 @@ export async function resumableProposeFixes(
 		sourceFiles: input.sourceFiles,
 		model: input.model,
 		allowed: [...input.allowed].sort(),
-		rolePrompts: input.rolePrompts,
+		rolePrompts: { fixer: fixerPrompt },
 	});
 	if (cached?.headSha === input.headSha) {
 		const result = FixCheckpointSchema.safeParse(cached.payload);
@@ -386,7 +421,11 @@ export async function resumableProposeFixes(
 			}
 		}
 	}
-	const patches = await proposeFixes(input);
+	const patches = await proposeFixes({
+		...input,
+		rolePrompts: { fixer: fixerPrompt },
+		rolePromptSource: undefined,
+	});
 	await input.persistence.putCheckpoint({
 		jobId: input.jobId,
 		headSha: input.headSha,
@@ -403,12 +442,18 @@ export async function verifyFixes(input: {
 	patches: FilePatch[];
 	sourceFiles: Record<string, string>;
 	model: Model;
-	rolePrompts: Pick<RolePrompts, 'verifier'>;
-	complete: Inference;
+	rolePrompts?: Pick<RolePrompts, 'verifier'>;
+	rolePromptSource?: RolePromptSource;
+	complete?: Inference;
+	inferencePort?: InferencePort;
 }): Promise<boolean> {
-	const text = await input.complete(
+	const [verifierPrompt, complete] = await Promise.all([
+		resolvePrompt(input, 'verifier'),
+		Promise.resolve(resolveInference(input)),
+	]);
+	const text = await complete(
 		input.model,
-		input.rolePrompts.verifier +
+		verifierPrompt +
 			' Return JSON only: {"resolved":true|false,"reason":"..."}. Confirm every finding is corrected by the supplied file contents.',
 		JSON.stringify({ findings: input.findings, sourceFiles: input.sourceFiles, patches: input.patches }),
 	);
@@ -430,6 +475,7 @@ export async function resumableVerifyFixes(
 		digest: ReviewDigest;
 	},
 ): Promise<boolean> {
+	const verifierPrompt = await resolvePrompt(input, 'verifier');
 	const cached = await input.persistence.getCheckpoint(input.jobId, 'verify', input.headSha);
 	const currentDigest = await inputDigest(input.digest, {
 		stage: 'verify-v1',
@@ -437,13 +483,17 @@ export async function resumableVerifyFixes(
 		patches: input.patches,
 		sourceFiles: input.sourceFiles,
 		model: input.model,
-		rolePrompts: input.rolePrompts,
+		rolePrompts: { verifier: verifierPrompt },
 	});
 	if (cached?.headSha === input.headSha) {
 		const result = FixVerificationCheckpointSchema.safeParse(cached.payload);
 		if (result.success && result.data.inputDigest === currentDigest) return result.data.resolved;
 	}
-	const resolved = await verifyFixes(input);
+	const resolved = await verifyFixes({
+		...input,
+		rolePrompts: { verifier: verifierPrompt },
+		rolePromptSource: undefined,
+	});
 	await input.persistence.putCheckpoint({
 		jobId: input.jobId,
 		headSha: input.headSha,
