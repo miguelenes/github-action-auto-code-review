@@ -1,6 +1,6 @@
 {
 	"name": "@miguelenes/reviewer-engine",
-	"version": "1.0.0",
+	"version": "2.0.0",
 	"description": "Runtime-neutral contracts and review stages for Open Source Agent Reviewer",
 	"license": "MIT",
 	"type": "module",

@@ -12,6 +12,7 @@ import {
 } from '@miguelenes/reviewer-engine';
 
 const model = (id: string) => ({ provider: 'groq', id }) as Model;
+const clock = { now: () => new Date('2026-01-02T03:04:05.000Z') };
 const evidence = {
 	severity: 'high',
 	category: 'security',
@@ -29,6 +30,7 @@ test('runtime-neutral review stages use injected prompts and inference only', as
 		diff: '+ vulnerable route',
 		models: [model('reviewer'), model('security'), model('challenger')],
 		rolePrompts: { reviewer: 'review prompt', challenger: 'challenge prompt' },
+		clock,
 		complete: async (selected, system) => {
 			calls.push(`${selected.id}:${system}`);
 			return selected.id === 'challenger' ? JSON.stringify([evidence]) : JSON.stringify([evidence]);
@@ -78,6 +80,7 @@ test('checkpointed reviews resume after reviewer work and invalidate checkpoints
 		models: [model('reviewer'), model('security'), model('challenger')],
 		rolePrompts: { reviewer: 'review prompt', challenger: 'challenge prompt' },
 		persistence,
+		clock,
 		complete: async (selected: Pick<Model, 'provider' | 'id'>) => {
 			firstCalls.push(selected.id);
 			if (selected.id === 'challenger' && failChallenge) throw new Error('temporary provider failure');
@@ -87,6 +90,7 @@ test('checkpointed reviews resume after reviewer work and invalidate checkpoints
 	await assert.rejects(resumableIndependentReview(input), /temporary provider failure/);
 	assert.deepEqual(firstCalls.sort(), ['challenger', 'reviewer', 'security']);
 	assert.equal(checkpoints.has('job-1:review'), true);
+	assert.equal(checkpoints.get('job-1:review')?.updatedAt, '2026-01-02T03:04:05.000Z');
 	const secondCalls: string[] = [];
 	failChallenge = false;
 	const resumed = await resumableIndependentReview({

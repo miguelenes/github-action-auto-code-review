@@ -74,7 +74,7 @@ async function main() {
 							provider,
 							{
 								status: value.status,
-								eligible: models.filter((m) => eligible(m)),
+								eligible: models.filter((m) => eligible(m, new Date())),
 								catalogCount: value.models.length,
 								...(value.error ? { error: value.error } : {}),
 							},

@@ -271,7 +271,7 @@ test('expired provider trial metadata is retained as a block rather than treated
 			),
 	);
 	assert.equal(model?.trialExpiresAt, '2020-01-01T00:00:00.000Z');
-	assert.equal(eligible(model!), false);
+	assert.equal(eligible(model!, new Date()), false);
 });
 
 test('OpenRouter key spend guard parses live non-resetting cap, BYOK, tier, and expiry evidence', async () => {

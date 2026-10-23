@@ -70,11 +70,17 @@ export function anchorFindings(
 	const valid = findings.filter((f) => anchors.get(f.path)?.has(f.line));
 	return { valid, rejected: findings.length - valid.length };
 }
-export function capabilityCandidates(models: Model[], preferred: string[], requiredContext: number): Model[] {
+export function capabilityCandidates(
+	models: Model[],
+	preferred: string[],
+	requiredContext: number,
+	now: Date,
+): Model[] {
 	const rank = (id: string) => (preferred.indexOf(id) === -1 ? Number.MAX_SAFE_INTEGER : preferred.indexOf(id));
 	const sorted = models
 		.filter(
-			(m) => eligible(m) && m.capabilities.chat === true && m.context !== undefined && m.context >= requiredContext,
+			(m) =>
+				eligible(m, now) && m.capabilities.chat === true && m.context !== undefined && m.context >= requiredContext,
 		)
 		.sort((a, b) => rank(a.id) - rank(b.id) || a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
 	const selected: Model[] = [],
@@ -92,12 +98,12 @@ export function capabilityCandidates(models: Model[], preferred: string[], requi
 	}
 	return selected;
 }
-export function selectReviewModels(models: Model[], preferred: string[], requiredContext: number): Model[] {
+export function selectReviewModels(models: Model[], preferred: string[], requiredContext: number, now: Date): Model[] {
 	const rank = (id: string) => (preferred.indexOf(id) === -1 ? Number.MAX_SAFE_INTEGER : preferred.indexOf(id));
 	const sorted = models
 		.filter(
 			(m) =>
-				eligible(m) &&
+				eligible(m, now) &&
 				m.capabilities.chat === true &&
 				m.capabilities.codeReview === true &&
 				m.context !== undefined &&
@@ -190,9 +196,10 @@ export async function reviewPullRequest(
 		policy.verifiedTrialOffers,
 		spendGuard,
 	);
-	const probeCandidates = capabilityCandidates(eligibleModels, policy.preferredModels, requiredContext);
+	const now = new Date();
+	const probeCandidates = capabilityCandidates(eligibleModels, policy.preferredModels, requiredContext, now);
 	const assessedCandidates = await assessReviewCapabilities(probeCandidates);
-	const candidates = selectReviewModels(assessedCandidates, policy.preferredModels, requiredContext);
+	const candidates = selectReviewModels(assessedCandidates, policy.preferredModels, requiredContext, now);
 	const { findings, used, disputed: initialDisputed } = await independentReview(diff, candidates, supplement.context);
 	let disputed = initialDisputed;
 	const modelUses = new Map<string, { model: Model; roles: string[] }>();

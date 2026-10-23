@@ -18,11 +18,13 @@ test('recursively rejects host imports, ambient environment access, and host glo
 				`const fileSystem = await import('fs/promises');\n` +
 				`fetch('https://example.test');\n` +
 				`setTimeout(() => undefined, 10);\n` +
+				`const observedAt = new Date().toISOString();\n` +
+				`const startedAt = Date.now();\n` +
 				`// Comments do not count: process.env and fetch()\n`,
 		);
 
 		const violations = await collectEngineBoundaryViolations(root);
-		assert.equal(violations.length, 7);
+		assert.equal(violations.length, 9);
 		assert.ok(violations.some((violation) => violation.includes('node:fs/promises')));
 		assert.ok(violations.some((violation) => violation.includes('fs/promises')));
 		assert.ok(violations.some((violation) => violation.includes('globalThis.process.env')));
@@ -30,6 +32,8 @@ test('recursively rejects host imports, ambient environment access, and host glo
 		assert.ok(violations.some((violation) => violation.includes('host runtime global "fetch"')));
 		assert.ok(violations.some((violation) => violation.includes('host runtime global "globalThis"')));
 		assert.ok(violations.some((violation) => violation.includes('host runtime global "setTimeout"')));
+		assert.ok(violations.some((violation) => violation.includes('new Date()')));
+		assert.ok(violations.some((violation) => violation.includes('Date.now()')));
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

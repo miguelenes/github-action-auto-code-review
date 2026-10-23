@@ -115,7 +115,7 @@ export async function completeModel(
 				completionCeiling = 0;
 			if ((model.inputUsdPerMillion ?? 0) > 0 || (model.outputUsdPerMillion ?? 0) > 0) {
 				const guard = await getOpenRouterSpendGuard(fetcher);
-				if (!trialSpendCapAllows(model as Model, guard))
+				if (!trialSpendCapAllows(model as Model, guard, new Date()))
 					throw new Error('OpenRouter trial spend guard is missing, stale, or no longer within its verified cap');
 				promptCeiling = model.inputUsdPerMillion!;
 				completionCeiling = model.outputUsdPerMillion!;

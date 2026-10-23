@@ -167,7 +167,7 @@ importers:
   .:
     dependencies:
       '@miguelenes/reviewer-engine':
-        specifier: workspace:1.0.0
+        specifier: workspace:2.0.0
         version: link:packages/reviewer-engine
       '@octokit/rest':
         specifier: ^22.0.0

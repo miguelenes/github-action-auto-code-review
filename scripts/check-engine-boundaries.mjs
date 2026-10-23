@@ -78,6 +78,9 @@ export async function collectEngineBoundaryViolations(root = engineSource) {
 			}
 
 			if (ts.isCallExpression(node)) {
+				const calledPath = accessPath(node.expression).join('.');
+				if (calledPath === 'Date.now' || (calledPath === 'Date' && node.arguments.length === 0))
+					add(file, `reads ambient system time through "${calledPath}()"`);
 				if (node.expression.kind === ts.SyntaxKind.ImportKeyword) {
 					const [argument] = node.arguments;
 					if (!argument || !ts.isStringLiteralLike(argument)) add(file, 'uses a non-static dynamic import');
@@ -92,6 +95,8 @@ export async function collectEngineBoundaryViolations(root = engineSource) {
 						add(file, `requires host runtime module "${argument.text}"`);
 				}
 			}
+			if (ts.isNewExpression(node) && accessPath(node.expression).join('.') === 'Date' && node.arguments?.length === 0)
+				add(file, 'reads ambient system time through "new Date()"');
 
 			const path = accessPath(node);
 			const dottedPath = path.join('.');

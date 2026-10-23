@@ -12,6 +12,7 @@ const result = await independentReview({
   models,
   rolePrompts: { reviewer, challenger, fixer, verifier },
   complete: (model, system, prompt) => provider.complete(model, system, prompt),
+  clock: { now: () => new Date() },
 });
 ```
 

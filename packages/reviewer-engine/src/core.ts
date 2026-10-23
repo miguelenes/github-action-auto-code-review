@@ -112,11 +112,7 @@ export interface ProviderAdapter {
 	discover(): Promise<Model[]>;
 	complete(model: string, prompt: string): Promise<string>;
 }
-export function trialSpendCapAllows(
-	m: Model,
-	guard: OpenRouterSpendGuard | null | undefined,
-	now = new Date(),
-): boolean {
+export function trialSpendCapAllows(m: Model, guard: OpenRouterSpendGuard | null | undefined, now: Date): boolean {
 	const fresh = (at: string) => now.getTime() - new Date(at).getTime() <= 86400000 && new Date(at) <= now;
 	if (
 		m.provider !== 'openrouter' ||
@@ -159,7 +155,7 @@ export function trialSpendCapAllows(
 		return false;
 	return guard.limitUsd <= m.trialCreditBudgetUsd && guard.remainingUsd > 0 && guard.remainingUsd <= guard.limitUsd;
 }
-export function eligible(m: Model, now = new Date()): boolean {
+export function eligible(m: Model, now: Date): boolean {
 	const fresh = (at: string) => now.getTime() - new Date(at).getTime() <= 86400000 && new Date(at) <= now;
 	if (
 		!m.priceEvidence.input ||

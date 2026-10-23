@@ -34,7 +34,14 @@ export async function independentReview(
 	evidenceContext = '',
 	complete: Complete = completeModel,
 ) {
-	return runIndependentReview({ diff, models, evidenceContext, rolePrompts: await loadRoles(), complete });
+	return runIndependentReview({
+		diff,
+		models,
+		evidenceContext,
+		rolePrompts: await loadRoles(),
+		complete,
+		clock: { now: () => new Date() },
+	});
 }
 
 export async function proposeFixes(

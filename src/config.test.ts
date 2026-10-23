@@ -73,7 +73,7 @@ test('trusted free-tier evidence enables only the exact advertised non-OpenRoute
 	const result = applyVerifiedFreeOffers(models, config.verifiedFreeOffers);
 	assert.equal(result[0]?.inputUsdPerMillion, 0);
 	assert.equal(result[0]?.accountTierEvidence?.claim, offer.accountTierEvidence.claim);
-	assert.equal(eligible(result[0]!), true);
+	assert.equal(eligible(result[0]!, new Date(now)), true);
 	assert.equal(result[1]?.inputUsdPerMillion, null);
 	assert.equal(result[2]?.inputUsdPerMillion, null);
 	const expired = ReviewConfigSchema.parse({
@@ -82,7 +82,7 @@ test('trusted free-tier evidence enables only the exact advertised non-OpenRoute
 			{ ...offer, accountTierEvidence: { ...offer.accountTierEvidence, observedAt: '2020-01-01T00:00:00.000Z' } },
 		],
 	});
-	assert.equal(eligible(applyVerifiedFreeOffers([models[0]!], expired.verifiedFreeOffers)[0]!), false);
+	assert.equal(eligible(applyVerifiedFreeOffers([models[0]!], expired.verifiedFreeOffers)[0]!, new Date(now)), false);
 });
 
 test('verified offers reject paid-fallback claims and OpenRouter overrides', () => {
@@ -148,7 +148,7 @@ test('verified OpenRouter trial offers require a fresh finite non-resetting key 
 		expiresAt: trial.trialExpiresAt,
 	};
 	const prepared = applyVerifiedTrialOffers([catalog], config.verifiedTrialOffers, guard)[0]!;
-	assert.equal(eligible(prepared), true);
+	assert.equal(eligible(prepared, new Date(now)), true);
 	for (const unsafe of [
 		{ ...guard, limitUsd: 11 },
 		{ ...guard, remainingUsd: 0 },
@@ -157,12 +157,12 @@ test('verified OpenRouter trial offers require a fresh finite non-resetting key 
 		{ ...guard, includeByokInLimit: false },
 		{ ...guard, expiresAt: null },
 	])
-		assert.equal(eligible({ ...prepared, spendGuardEvidence: unsafe }), false);
+		assert.equal(eligible({ ...prepared, spendGuardEvidence: unsafe }, new Date(now)), false);
 	const stale = applyVerifiedTrialOffers([catalog], config.verifiedTrialOffers, {
 		...guard,
 		observedAt: '2020-01-01T00:00:00.000Z',
 	})[0]!;
-	assert.equal(eligible(stale), false);
+	assert.equal(eligible(stale, new Date(now)), false);
 	assert.throws(() =>
 		ReviewConfigSchema.parse({ providers: ['openrouter'], verifiedTrialOffers: [trial, { ...trial }] }),
 	);

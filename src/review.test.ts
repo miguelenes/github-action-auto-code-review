@@ -70,6 +70,7 @@ const candidate = (
 	});
 };
 test('capability probes are bounded, context-fit, and spread across providers', () => {
+	const now = new Date(Date.now() + 1000);
 	const pool = [
 		candidate('openrouter', 'or-a'),
 		candidate('openrouter', 'or-b'),
@@ -78,7 +79,7 @@ test('capability probes are bounded, context-fit, and spread across providers', 
 		candidate('groq', 'too-small'),
 	];
 	pool[4]!.context = 10;
-	const selected = capabilityCandidates(pool, ['or-b'], 100);
+	const selected = capabilityCandidates(pool, ['or-b'], 100, now);
 	assert.deepEqual(
 		selected.map((model) => model.id),
 		['or-b', 'gemini-a', 'groq-a', 'or-a'],
@@ -90,6 +91,7 @@ test('capability probes are bounded, context-fit, and spread across providers', 
 	assert.ok(new Set(selected.slice(0, 3).map((model) => model.provider)).size >= 2);
 });
 test('review model selection honors context, spreads first reviewers, and preserves fixer/verifier choices', () => {
+	const now = new Date(Date.now() + 1000);
 	const models = [
 		candidate('openrouter', 'or-a'),
 		candidate('openrouter', 'or-b'),
@@ -97,7 +99,7 @@ test('review model selection honors context, spreads first reviewers, and preser
 		candidate('groq', 'groq-a'),
 		candidate('gemini', 'gemini-a'),
 	];
-	const selected = selectReviewModels(models, ['or-b', 'groq-a'], 20_000);
+	const selected = selectReviewModels(models, ['or-b', 'groq-a'], 20_000, now);
 	assert.deepEqual(
 		selected.slice(0, 2).map((m) => m.id),
 		['or-b', 'groq-a'],
@@ -107,12 +109,14 @@ test('review model selection honors context, spreads first reviewers, and preser
 	assert.notEqual(selected[3]?.id, selected[0]?.id);
 });
 test('review model selection requires demonstrated capability, provider diversity, and enough context', () => {
+	const now = new Date(Date.now() + 1000);
 	assert.throws(
 		() =>
 			selectReviewModels(
 				[candidate('openrouter', 'a'), candidate('openrouter', 'b'), candidate('openrouter', 'c')],
 				[],
 				100,
+				now,
 			),
 		/passed the review capability check across at least two providers/,
 	);
@@ -122,13 +126,14 @@ test('review model selection requires demonstrated capability, provider diversit
 				[candidate('openrouter', 'a'), candidate('groq', 'b', null), candidate('gemini', 'c')],
 				[],
 				100,
+				now,
 			),
 		/passed the review capability check/,
 	);
 	const tooSmall = candidate('groq', 'small');
 	tooSmall.context = 100;
 	assert.throws(
-		() => selectReviewModels([candidate('openrouter', 'a'), candidate('gemini', 'b'), tooSmall], [], 1_000),
+		() => selectReviewModels([candidate('openrouter', 'a'), candidate('gemini', 'b'), tooSmall], [], 1_000, now),
 		/sufficient context/,
 	);
 });

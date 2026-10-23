@@ -142,6 +142,7 @@ export async function independentReview(input: {
 	evidenceContext?: string;
 	rolePrompts: Pick<RolePrompts, 'reviewer' | 'challenger'>;
 	complete: Inference;
+	clock: ReviewClock;
 }): Promise<{ findings: Finding[]; used: Model[]; disputed: number }> {
 	const persistence: ReviewPersistence = {
 		async getCheckpoint() {
@@ -165,7 +166,7 @@ export async function resumableIndependentReview(input: {
 	rolePrompts: Pick<RolePrompts, 'reviewer' | 'challenger'>;
 	complete: Inference;
 	persistence: ReviewPersistence;
-	clock?: ReviewClock;
+	clock: ReviewClock;
 	persistPrompt?: (prompt: ReviewPrompt) => Promise<void>;
 }): Promise<{ findings: Finding[]; used: Model[]; disputed: number }> {
 	const { diff, models, rolePrompts, complete } = input;
@@ -202,7 +203,7 @@ export async function resumableIndependentReview(input: {
 			stage: 'review',
 			revision: (cachedReview?.revision ?? 0) + 1,
 			payload: proposals,
-			updatedAt: (input.clock ?? { now: () => new Date() }).now().toISOString(),
+			updatedAt: input.clock.now().toISOString(),
 		});
 	}
 	if (!proposals.length) return { findings: [], used: usable.slice(0, 2), disputed: 0 };
@@ -232,7 +233,7 @@ export async function resumableIndependentReview(input: {
 			stage: 'challenge',
 			revision: (cachedChallenge?.revision ?? 0) + 1,
 			payload: confirmations,
-			updatedAt: (input.clock ?? { now: () => new Date() }).now().toISOString(),
+			updatedAt: input.clock.now().toISOString(),
 		});
 	}
 	const findings = confirmedFindings(proposals, confirmations);
