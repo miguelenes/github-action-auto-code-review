@@ -24,7 +24,18 @@ The open-source path keeps provider accounts, model selection, and review eviden
 
 ## Migration
 
-To move from self-hosted operation to Cloud, first disable the existing Action/webhook trigger for the selected repositories, then install and connect the Cloud GitHub App and enable only the intended repositories. This avoids duplicate reviews for the same pull request head. To move back, disable those repositories in the Cloud dashboard, disconnect the App when no longer needed, and then re-enable the self-hosted trigger. Cloud evidence is not automatically transferred to a self-hosted installation; export or retain any needed records before deletion.
+Self-hosted and Cloud deployments keep separate job and idempotency records. They do not deduplicate reviews across modes, so overlapping triggers can review the same pull-request head twice.
+
+For a self-hosted-to-Cloud cutover:
+
+1. Choose a quiet cutover window and stop new self-hosted triggers for the repositories being moved. Disable every configured Action, webhook, or scheduled invocation that can start a review.
+2. Let already-started reviews finish. Check the self-hosted run or job state for each one; do not enable Cloud while a run is still retrying, fixing, or verifying a head. Cancel or resolve stuck work before proceeding.
+3. Install and connect the Cloud GitHub App, then enable only the selected repositories in the dashboard. Keep the old self-hosted triggers disabled.
+4. Confirm one subsequent pull-request event creates one Cloud job and one published review before expanding the repository selection.
+
+For a Cloud-to-self-hosted cutover, first disable the repositories in the Cloud dashboard and stop or let existing Cloud jobs reach a terminal state. Then disconnect the App if it is no longer needed, configure the self-hosted credentials and trusted base, and enable its triggers. Confirm one subsequent event produces one self-hosted review before restoring other triggers.
+
+Review history, provider credentials, billing allowances, and in-flight jobs are not transferred between modes. Export or retain evidence you need before deleting the Cloud account; account deletion removes hosted evidence according to the published deletion behavior. Do not cut over while a review for the same open pull request is active in either mode.
 
 ## Hosted service status
 
