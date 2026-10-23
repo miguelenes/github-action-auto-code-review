@@ -4,11 +4,11 @@ The hosted service is a separate, private Cloudflare application. The public rep
 
 ## Choose where credentials and evidence live
 
-| Mode | GitHub access | Model access | Allowance | Review evidence |
-| --- | --- | --- | --- | --- |
-| Actions, CLI, or self-hosted webhook | Your GitHub credentials | Your provider keys and account limits | Your provider quota | In your GitHub account or self-hosted storage |
-| Cloud Free | GitHub sign-in plus the Reviewer GitHub App | Managed provider pool | 10 reviews per UTC month per GitHub owner workspace | 30 days |
-| Cloud Pro | GitHub sign-in plus the Reviewer GitHub App | Managed provider pool | €19/month before applicable tax; 100 reviews per billing period | 90 days |
+| Mode                                 | GitHub access                               | Model access                          | Allowance                                                       | Review evidence                               |
+| ------------------------------------ | ------------------------------------------- | ------------------------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| Actions, CLI, or self-hosted webhook | Your GitHub credentials                     | Your provider keys and account limits | Your provider quota                                             | In your GitHub account or self-hosted storage |
+| Cloud Free                           | GitHub sign-in plus the Reviewer GitHub App | Managed provider pool                 | 10 reviews per UTC month per GitHub owner workspace             | 30 days                                       |
+| Cloud Pro                            | GitHub sign-in plus the Reviewer GitHub App | Managed provider pool                 | €19/month before applicable tax; 100 reviews per billing period | 90 days                                       |
 
 The GitHub App installation is separate from GitHub sign-in. Install it on the personal account or organization, then connect the installation from the dashboard. Only a verified personal-account owner or organization admin can connect and manage workspace settings. Select repositories explicitly; connected repositories start disabled.
 
